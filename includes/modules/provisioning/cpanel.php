@@ -13,7 +13,7 @@ class CpanelModule extends ProvisioningBase {
      * Build WHM API v1 URL
      */
     private function whmUrl(string $function, array $params = []): string {
-        $host   = rtrim($this->config['hostname'], '/');
+        $host   = preg_replace('~^https?://~i', '', rtrim($this->config['hostname'], '/'));
         $port   = $this->config['port'] ?? 2087;
         $base   = "https://{$host}:{$port}/json-api/{$function}?api.version=1";
         if ($params) $base .= '&' . http_build_query($params);

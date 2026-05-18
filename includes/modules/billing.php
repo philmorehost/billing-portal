@@ -82,6 +82,21 @@ class Billing {
             [$inv['client_id'], $inv_id, $inv['total'], $inv['currency'], $gateway, $gateway_ref]
         );
 
+        // Deduct reseller balance if this service is branded / resold
+        $resold_services = DB::rows(
+            "SELECT s.id, s.product_id, s.billing_cycle, s.reseller_id, s.domain 
+             FROM services s
+             JOIN invoice_items ii ON ii.service_id = s.id
+             WHERE ii.invoice_id = ? AND s.status = 'pending' AND s.reseller_id IS NOT NULL",
+            'i', [$inv_id]
+        );
+
+        foreach ($resold_services as $rs) {
+            require_once INC_PATH . '/modules/reseller.php';
+            $wholesale_price = Reseller::getWholesalePrice((int)$rs['product_id'], $rs['billing_cycle'], (int)$rs['reseller_id']);
+            Reseller::deductBalance((int)$rs['reseller_id'], $wholesale_price, "Wholesale cost for service {$rs['domain']} (service #{$rs['id']})");
+        }
+
         // Activate associated services
         DB::execute(
             "UPDATE services s

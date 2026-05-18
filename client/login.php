@@ -1,7 +1,12 @@
 <?php
 require_once '../includes/config.php';
 if(Auth::isClientLoggedIn()) redirect(BASE_URL.'/client/');
-$error=''; $company=DB::setting('company_name','Billing Portal');
+if (!empty($_SESSION['reseller_host_brand'])) {
+    $company = $_SESSION['reseller_host_brand']['name'];
+} else {
+    $company=DB::setting('company_name','Billing Portal');
+}
+$error='';
 if(is_post()&&csrf_verify()){
     $r=Auth::clientLogin(trim(post('email')),post('password'),!empty($_POST['remember']));
     if($r['success']) redirect(BASE_URL.'/client/');
@@ -12,6 +17,17 @@ if(is_post()&&csrf_verify()){
 <title>Login — <?=h($company)?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="<?=BASE_URL?>/assets/css/style.css" rel="stylesheet">
+<?php if (!empty($_SESSION['reseller_host_brand'])): ?>
+<style>
+:root {
+  --bp-primary: <?= h($_SESSION['reseller_host_brand']['color']) ?>;
+  --bp-accent: <?= h($_SESSION['reseller_host_brand']['color']) ?>;
+}
+.al {
+  background: linear-gradient(145deg, <?= h($_SESSION['reseller_host_brand']['color']) ?> 0%, #1e3a5f 100%) !important;
+}
+</style>
+<?php endif; ?>
 <style>body{background:#f1f5f9;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px}
 .aw{width:100%;max-width:880px;display:grid;grid-template-columns:1fr 1fr;gap:0;border-radius:20px;overflow:hidden;box-shadow:0 8px 60px rgba(0,0,0,.12)}
 .al{background:linear-gradient(145deg,#0f172a 0%,#1e3a5f 60%,#0e4f8a 100%);padding:48px 40px;display:flex;flex-direction:column;justify-content:space-between}

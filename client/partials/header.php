@@ -1,5 +1,9 @@
 <?php
-$company  = $company  ?? DB::setting('company_name','Billing Portal');
+if (!empty($_SESSION['reseller_host_brand'])) {
+    $company = $_SESSION['reseller_host_brand']['name'];
+} else {
+    $company  = $company  ?? DB::setting('company_name','Billing Portal');
+}
 $currency = $currency ?? DB::setting('base_currency','NGN');
 $page_title=$page_title??'Client Area';
 ?><!DOCTYPE html><html lang="en"><head>
@@ -7,6 +11,14 @@ $page_title=$page_title??'Client Area';
 <title><?=h($page_title)?> — <?=h($company)?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="<?=BASE_URL?>/assets/css/style.css" rel="stylesheet">
+<?php if (!empty($_SESSION['reseller_host_brand'])): ?>
+<style>
+:root {
+  --bp-primary: <?= h($_SESSION['reseller_host_brand']['color']) ?>;
+  --bp-accent: <?= h($_SESSION['reseller_host_brand']['color']) ?>;
+}
+</style>
+<?php endif; ?>
 </head><body>
 <div class="bp-layout">
 <aside class="bp-sidebar" id="sidebar"><div class="sidebar">

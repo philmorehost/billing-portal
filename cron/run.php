@@ -4,7 +4,7 @@ if (!$is_cli) { if (empty($_GET['key'])) { http_response_code(403); exit('Forbid
 require_once __DIR__.'/../includes/config.php';
 $run_job=$is_cli?($argv[1]??null):get_param('job');
 function cron_log($job,$status,$output){
-    DB::execute("UPDATE cron_jobs SET last_run=NOW(),last_status=?,last_output=?,next_run=DATE_ADD(NOW(),INTERVAL 1 DAY) WHERE slug=?",'sss',[$status,$output,$job]);
+    DB::execute("UPDATE cron_jobs SET last_run=NOW(),last_status=?,last_output=?,next_run=CASE WHEN frequency='hourly' THEN DATE_ADD(NOW(),INTERVAL 1 HOUR) WHEN frequency='weekly' THEN DATE_ADD(NOW(),INTERVAL 7 DAY) WHEN frequency='monthly' THEN DATE_ADD(NOW(),INTERVAL 1 MONTH) ELSE DATE_ADD(NOW(),INTERVAL 1 DAY) END WHERE slug=?",'sss',[$status,$output,$job]);
     echo "[".date('Y-m-d H:i:s')."] [{$job}] {$status}: {$output}\n";
 }
 function run_invoice_generation(){
@@ -40,11 +40,10 @@ function run_service_termination(){
     return "Terminated {$r['affected_rows']} service(s).";
 }
 function run_domain_expiry_check(){ return "Domain expiry check complete."; }
-function run_ssl_cert_check(){ return "SSL check complete."; }
 function run_affiliate_payouts(){ return "Affiliate payouts processed."; }
 function run_report_generation(){ return "Reports generated."; }
 
-$jobs=['invoice_generation'=>'run_invoice_generation','payment_reminders'=>'run_payment_reminders','service_suspension'=>'run_service_suspension','service_termination'=>'run_service_termination','domain_expiry_check'=>'run_domain_expiry_check','ssl_cert_check'=>'run_ssl_cert_check','affiliate_payouts'=>'run_affiliate_payouts','report_generation'=>'run_report_generation'];
+$jobs=['invoice_generation'=>'run_invoice_generation','payment_reminders'=>'run_payment_reminders','service_suspension'=>'run_service_suspension','service_termination'=>'run_service_termination','domain_expiry_check'=>'run_domain_expiry_check','ssl_cert_check'=>'run_ssl_cert_check','affiliate_payouts'=>'run_affiliate_payouts','report_generation'=>'run_report_generation','auto_provision'=>'run_auto_provision'];
 
 if ($run_job) {
     if (isset($jobs[$run_job])) { try { cron_log($run_job,'success',call_user_func($jobs[$run_job])); } catch(Exception $e){ cron_log($run_job,'failed',$e->getMessage()); } }

@@ -1,7 +1,12 @@
 <?php
 require_once '../includes/config.php';
 if(Auth::isClientLoggedIn()) redirect(BASE_URL.'/client/');
-$company=DB::setting('company_name','Billing Portal'); $errors=[];
+if (!empty($_SESSION['reseller_host_brand'])) {
+    $company = $_SESSION['reseller_host_brand']['name'];
+} else {
+    $company=DB::setting('company_name','Billing Portal');
+}
+$errors=[];
 if(is_post()&&csrf_verify()){
     $first=trim(post('first_name')); $last=trim(post('last_name')); $email=strtolower(trim(post('email')));
     $pw=post('password'); $pw2=post('confirm_password'); $tos=!empty($_POST['tos_accept']);
@@ -14,11 +19,19 @@ if(is_post()&&csrf_verify()){
     if(empty($errors)){
         $hash=Auth::hashPassword($pw); $token=generate_token();
         $aff_id=null;
-        if(!empty($_COOKIE['ref'])){$a=DB::row("SELECT id FROM affiliates WHERE referral_code=? AND status='active'",'s',[$_COOKIE['ref']]);if($a)$aff_id=$a['id'];}
+        if(!empty($_SESSION['reseller_domain_id'])){
+            $reseller = DB::row("SELECT client_id FROM resellers WHERE id=?",'i',[$_SESSION['reseller_domain_id']]);
+            if ($reseller) {
+                $a=DB::row("SELECT id FROM affiliates WHERE client_id=? AND status='active'",'i',[$reseller['client_id']]);
+                if($a)$aff_id=$a['id'];
+            }
+        }
+        if(!$aff_id && !empty($_COOKIE['ref'])){$a=DB::row("SELECT id FROM affiliates WHERE referral_code=? AND status='active'",'s',[$_COOKIE['ref']]);if($a)$aff_id=$a['id'];}
         $r=DB::execute("INSERT INTO clients (first_name,last_name,email,password,phone,company,email_verify_token,tos_accepted,tos_accepted_at,affiliate_id,status) VALUES (?,?,?,?,?,?,?,1,NOW(),?,'active')",'sssssssi',[$first,$last,$email,$hash,trim(post('phone')),trim(post('company')),$token,$aff_id]);
         $cid=$r['insert_id'];
         log_activity('client_register',"New registration: {$email}",'client',$cid);
-        Mailer::sendTemplate($email,"$first $last",'welcome',['client_name'=>$first,'login_url'=>BASE_URL.'/client/login.php']);
+        $branding = !empty($_SESSION['reseller_domain_id']) ? $_SESSION['reseller_host_brand'] : ['name' => $company];
+        Mailer::sendTemplate($email,"$first $last",'welcome',['client_name'=>$first,'company_name'=>$branding['name'],'login_url'=>BASE_URL.'/client/login.php']);
         $client=DB::row("SELECT * FROM clients WHERE id=?",'i',[$cid]);
         Auth::setClientSession($client);
         redirect(BASE_URL.'/client/?welcome=1');
@@ -28,6 +41,17 @@ if(is_post()&&csrf_verify()){
 <title>Create Account — <?=h($company)?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="<?=BASE_URL?>/assets/css/style.css" rel="stylesheet">
+<?php if (!empty($_SESSION['reseller_host_brand'])): ?>
+<style>
+:root {
+  --bp-primary: <?= h($_SESSION['reseller_host_brand']['color']) ?>;
+  --bp-accent: <?= h($_SESSION['reseller_host_brand']['color']) ?>;
+}
+.rli {
+  background: linear-gradient(135deg, <?= h($_SESSION['reseller_host_brand']['color']) ?>, #3b82f6) !important;
+}
+</style>
+<?php endif; ?>
 <style>body{background:#f1f5f9;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px}
 .rw{width:100%;max-width:520px}.rl{text-align:center;margin-bottom:24px}
 .rl a{display:inline-flex;align-items:center;gap:10px;text-decoration:none}

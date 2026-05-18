@@ -29,7 +29,12 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
     if(!$prod) { $error='Product not found.'; }
     else {
         $price_col='price_'.$cyc;
-        $price=(float)($prod[$price_col]??0);
+        if (!empty($_SESSION['reseller_domain_id'])) {
+            require_once INC_PATH . '/modules/reseller.php';
+            $price = Reseller::getRetailPrice((int)$prod['id'], $cyc, (int)$_SESSION['reseller_domain_id']);
+        } else {
+            $price=(float)($prod[$price_col]??0);
+        }
         if(!$price) { $error='Selected billing cycle not available.'; }
         else {
             $tax_enabled=DB::setting('tax_enabled','1')==='1';
@@ -61,7 +66,8 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                         default         =>date('Y-m-d',strtotime('+1 month')),
                     };
 
-                    DB::execute("INSERT INTO services (client_id,order_id,product_id,domain,billing_cycle,price,next_due_date,registration_date,status) VALUES (?,?,?,?,?,?,?,CURDATE(),'pending')",'iiissds',[$client['id'],$order_id,$pid2,$domain,$cyc,$price,$next_due]);
+                    $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
+                    DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),'pending')",'iiiisssds',[$client['id'],$order_id,$pid2,$reseller_id,$domain,$cyc,$price,$next_due]);
                     $svc_id=DB::lastInsertId();
 
                     $inv_id=Billing::createInvoice([
@@ -117,8 +123,16 @@ foreach($all_products as $p):
     </div>
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
       <div style="text-align:right">
-        <?php if($p['price_monthly']):?><div style="font-size:22px;font-weight:900;color:#0f172a"><?=format_currency($p['price_monthly'],$p['currency']??$currency)?><span style="font-size:13px;font-weight:400;color:#64748b">/mo</span></div><?php endif?>
-        <?php if($p['price_annually']):?><div style="font-size:12px;color:#10b981">or <?=format_currency($p['price_annually'],$p['currency']??$currency)?>/yr</div><?php endif?>
+        <?php 
+        $p_monthly = (float)($p['price_monthly'] ?? 0);
+        $p_annually = (float)($p['price_annually'] ?? 0);
+        if (!empty($_SESSION['reseller_domain_id'])) {
+            require_once INC_PATH . '/modules/reseller.php';
+            if ($p_monthly > 0) $p_monthly = Reseller::getRetailPrice((int)$p['id'], 'monthly', (int)$_SESSION['reseller_domain_id']);
+            if ($p_annually > 0) $p_annually = Reseller::getRetailPrice((int)$p['id'], 'annually', (int)$_SESSION['reseller_domain_id']);
+        }
+        if($p_monthly):?><div style="font-size:22px;font-weight:900;color:#0f172a"><?=format_currency($p_monthly,$p['currency']??$currency)?><span style="font-size:13px;font-weight:400;color:#64748b">/mo</span></div><?php endif?>
+        <?php if($p_annually):?><div style="font-size:12px;color:#10b981">or <?=format_currency($p_annually,$p['currency']??$currency)?>/yr</div><?php endif?>
       </div>
       <a href="?product_id=<?=$p['id']?>" class="bp-btn bp-btn-primary">Order →</a>
     </div>
@@ -147,6 +161,10 @@ foreach($all_products as $p):
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">
             <?php $first_cycle=true; foreach($cycles as $ck=>$cl):
               $price_col='price_'.$ck; $pr=(float)($product[$price_col]??0); if(!$pr)continue;
+              if (!empty($_SESSION['reseller_domain_id'])) {
+                  require_once INC_PATH . '/modules/reseller.php';
+                  $pr = Reseller::getRetailPrice((int)$product['id'], $ck, (int)$_SESSION['reseller_domain_id']);
+              }
             ?>
             <label style="border:1.5px solid <?=$first_cycle?'#3b82f6':'#e2e8f0'?>;border-radius:10px;padding:12px;cursor:pointer;transition:all .2s;text-align:center" class="cycle-opt" data-price="<?=$pr?>" data-cycle="<?=$ck?>">
               <input type="radio" name="cycle_radio" value="<?=$ck?>" <?=$first_cycle?'checked':''?> style="display:none">
@@ -192,7 +210,24 @@ foreach($all_products as $p):
 
   <div class="col-lg-5">
     <div class="bp-card"><div class="bp-card-header"><h3 class="bp-card-title">Order Summary</h3></div><div class="bp-card-body">
-      <?php $first_pr=(float)(array_values(array_filter(array_map(fn($c)=>(float)($product['price_'.$c]??0),array_keys($cycles))))[0]??0);?>
+      <?php 
+      $first_ck = '';
+      foreach (['monthly','quarterly','semi_annually','annually','biennially'] as $c) {
+          if ((float)($product['price_'.$c]??0) > 0) {
+              $first_ck = $c;
+              break;
+          }
+      }
+      $first_pr = 0;
+      if ($first_ck) {
+          if (!empty($_SESSION['reseller_domain_id'])) {
+              require_once INC_PATH . '/modules/reseller.php';
+              $first_pr = Reseller::getRetailPrice((int)$product['id'], $first_ck, (int)$_SESSION['reseller_domain_id']);
+          } else {
+              $first_pr = (float)($product['price_'.$first_ck]??0);
+          }
+      }
+      ?>
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px"><span style="color:#64748b"><?=h($product['name'])?></span><span id="sum-price" style="font-weight:600"><?=format_currency($first_pr,$currency)?></span></div>
       <?php if($tax_rate_display>0):?>
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px"><span style="color:#64748b"><?=h(DB::setting('tax_name','VAT'))?> (<?=$tax_rate_display?>%)</span><span id="sum-tax" style="font-weight:600"><?=format_currency(round($first_pr*($tax_rate_display/100),2),$currency)?></span></div>
@@ -208,7 +243,7 @@ foreach($all_products as $p):
 
 <script>
 const taxRate=<?=$tax_rate_display?>/100;
-let curPrice=<?=$product?json_encode((float)(array_values(array_filter(array_map(fn($c)=>(float)($product['price_'.$c]??0),['monthly','quarterly','semi_annually','annually','biennially'])))[0]??0)):0?>;
+let curPrice=<?=$product?json_encode((float)$first_pr):0?>;
 let discountAmt=0;
 const curr='<?=$currency?>';
 

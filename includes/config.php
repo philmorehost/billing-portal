@@ -37,6 +37,24 @@ foreach (['db','functions','auth','mailer'] as $f) {
     if (file_exists($p)) require_once $p;
 }
 
+// Global Reseller Custom Domain Host Detector
+if (class_exists('DB') && file_exists($config_file)) {
+    require_once INC_PATH . '/modules/reseller.php';
+    try {
+        $reseller_host = Reseller::detectFromHost();
+        if ($reseller_host) {
+            $_SESSION['reseller_domain_id']  = $reseller_host['id'];
+            $_SESSION['reseller_host_brand'] = [
+                'name'  => $reseller_host['branding_name'] ?: DB::setting('company_name', 'Billing Portal'),
+                'color' => $reseller_host['branding_color'] ?: '#0f172a',
+            ];
+        } else {
+            unset($_SESSION['reseller_domain_id']);
+            unset($_SESSION['reseller_host_brand']);
+        }
+    } catch (Exception $e) {}
+}
+
 // Maintenance mode — redirect clients if enabled
 if (!$is_installer && file_exists($config_file)) {
     $is_admin   = str_contains($_SERVER['SCRIPT_FILENAME'] ?? '', DIRECTORY_SEPARATOR . 'admin' . DIRECTORY_SEPARATOR);
