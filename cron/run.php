@@ -19,7 +19,43 @@ function run_invoice_generation(){
         $r=DB::execute("INSERT INTO invoices (client_id,invoice_number,subtotal,tax_amount,total,currency,status,due_date) VALUES (?,?,?,?,?,?,'unpaid',?)",'issddds',[$svc['client_id'],$num,$price,$tax,$total,$cur,$due_date]);
         $iid=$r['insert_id'];
         DB::execute("INSERT INTO invoice_items (invoice_id,service_id,description,quantity,unit_price,total,tax_rate) VALUES (?,?,?,1,?,?,?)",'iisddd',[$iid,$svc['id'],$svc['pname'],$price,$total,$tax_r]);
-        Mailer::sendTemplate($svc['email'],$svc['first_name'].' '.$svc['last_name'],'invoice_created',['client_name'=>$svc['first_name'],'invoice_number'=>$num,'invoice_total'=>format_currency($total,$cur),'due_date'=>format_date($due_date),'invoice_url'=>BASE_URL.'/client/invoices/view.php?id='.$iid]);
+
+        // Construct HTML components for invoice email
+        $items_html = '<tr>
+            <td style="padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; color: #4a5568;">' . htmlspecialchars($svc['pname']) . '</td>
+            <td style="padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; color: #4a5568; text-align: center;">1</td>
+            <td style="padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; color: #4a5568; text-align: right;">' . format_currency($price,$cur) . '</td>
+            <td style="padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; font-weight: bold; color: #2d3748; text-align: right;">' . format_currency($price,$cur) . '</td>
+        </tr>';
+
+        $bank_details = Billing::getBankDetails($iid);
+        $bank_html = '<div style="background: #f7fafc; border: 1.5px solid #edf2f7; border-radius: 8px; padding: 16px; margin-top: 20px; font-family: sans-serif;">
+            <div style="font-weight: bold; font-size: 14px; color: #2d3748; margin-bottom: 12px;">🏦 Manual Bank Transfer Details</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+        $lines = explode("\n", $bank_details);
+        foreach ($lines as $line) {
+            $parts = explode(":", $line, 2);
+            if (count($parts) === 2 && !empty(trim($parts[0]))) {
+                $bank_html .= '<tr><td style="padding: 6px 0; color: #718096; font-weight: 500; border-bottom: 1px dashed #edf2f7;">' . htmlspecialchars(trim($parts[0])) . '</td><td style="padding: 6px 0; text-align: right; font-weight: bold; color: #2d3748; border-bottom: 1px dashed #edf2f7;">' . htmlspecialchars(trim($parts[1])) . '</td></tr>';
+            } else if (!empty(trim($line))) {
+                $bank_html .= '<tr><td colspan="2" style="padding: 6px 0; color: #4a5568; font-weight: 500;">' . htmlspecialchars($line) . '</td></tr>';
+            }
+        }
+        $bank_html .= '</table></div>';
+
+        Mailer::sendTemplate($svc['email'],$svc['first_name'].' '.$svc['last_name'],'invoice_created',[
+            'client_name'=>$svc['first_name'],
+            'invoice_number'=>$num,
+            'invoice_total'=>format_currency($total,$cur),
+            'due_date'=>format_date($due_date),
+            'invoice_url'=>BASE_URL.'/client/invoices/view.php?id='.$iid,
+            'invoice_items'=>$items_html,
+            'subtotal'=>format_currency($price,$cur),
+            'tax_amount'=>format_currency($tax,$cur),
+            'discount_amount'=>format_currency(0,$cur),
+            'bank_details'=>$bank_html
+        ]);
+
         $count++;
     }
     return "Generated {$count} invoice(s).";
@@ -27,7 +63,46 @@ function run_invoice_generation(){
 function run_payment_reminders(){
     DB::execute("UPDATE invoices SET status='overdue' WHERE status='unpaid' AND due_date<CURDATE()");
     $rows=DB::rows("SELECT i.*,c.email,c.first_name FROM invoices i JOIN clients c ON c.id=i.client_id WHERE i.status='overdue'");
-    foreach($rows as $inv) Mailer::sendTemplate($inv['email'],$inv['first_name'],'invoice_created',['client_name'=>$inv['first_name'],'invoice_number'=>$inv['invoice_number'],'invoice_total'=>format_currency($inv['total'],$inv['currency']),'due_date'=>format_date($inv['due_date']),'invoice_url'=>BASE_URL.'/client/invoices/view.php?id='.$inv['id']]);
+    foreach($rows as $inv) {
+        $items = DB::rows("SELECT * FROM invoice_items WHERE invoice_id=?", 'i', [$inv['id']]);
+        $items_html = '';
+        foreach ($items as $item) {
+            $items_html .= '<tr>
+                <td style="padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; color: #4a5568;">' . htmlspecialchars($item['description']) . '</td>
+                <td style="padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; color: #4a5568; text-align: center;">' . $item['quantity'] . '</td>
+                <td style="padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; color: #4a5568; text-align: right;">' . format_currency($item['unit_price'],$inv['currency']) . '</td>
+                <td style="padding: 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; font-weight: bold; color: #2d3748; text-align: right;">' . format_currency($item['total'],$inv['currency']) . '</td>
+            </tr>';
+        }
+
+        $bank_details = Billing::getBankDetails($inv['id']);
+        $bank_html = '<div style="background: #f7fafc; border: 1.5px solid #edf2f7; border-radius: 8px; padding: 16px; margin-top: 20px; font-family: sans-serif;">
+            <div style="font-weight: bold; font-size: 14px; color: #2d3748; margin-bottom: 12px;">🏦 Manual Bank Transfer Details</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+        $lines = explode("\n", $bank_details);
+        foreach ($lines as $line) {
+            $parts = explode(":", $line, 2);
+            if (count($parts) === 2 && !empty(trim($parts[0]))) {
+                $bank_html .= '<tr><td style="padding: 6px 0; color: #718096; font-weight: 500; border-bottom: 1px dashed #edf2f7;">' . htmlspecialchars(trim($parts[0])) . '</td><td style="padding: 6px 0; text-align: right; font-weight: bold; color: #2d3748; border-bottom: 1px dashed #edf2f7;">' . htmlspecialchars(trim($parts[1])) . '</td></tr>';
+            } else if (!empty(trim($line))) {
+                $bank_html .= '<tr><td colspan="2" style="padding: 6px 0; color: #4a5568; font-weight: 500;">' . htmlspecialchars($line) . '</td></tr>';
+            }
+        }
+        $bank_html .= '</table></div>';
+
+        Mailer::sendTemplate($inv['email'],$inv['first_name'],'invoice_created',[
+            'client_name'=>$inv['first_name'],
+            'invoice_number'=>$inv['invoice_number'],
+            'invoice_total'=>format_currency($inv['total'],$inv['currency']),
+            'due_date'=>format_date($inv['due_date']),
+            'invoice_url'=>BASE_URL.'/client/invoices/view.php?id='.$inv['id'],
+            'invoice_items'=>$items_html,
+            'subtotal'=>format_currency($inv['subtotal'],$inv['currency']),
+            'tax_amount'=>format_currency($inv['tax_amount'],$inv['currency']),
+            'discount_amount'=>format_currency($inv['discount_amount'],$inv['currency']),
+            'bank_details'=>$bank_html
+        ]);
+    }
     return "Processed ".count($rows)." reminder(s).";
 }
 function run_service_suspension(){

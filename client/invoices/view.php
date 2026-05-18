@@ -44,6 +44,53 @@ $can_credit=$credit>=$inv['total'];
 $can_pay=in_array($inv['status'],['unpaid','overdue']);
 include dirname(dirname(__FILE__)).'/partials/header.php';
 ?>
+<style>
+@media (max-width: 768px) {
+  .inv-card-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 20px !important;
+  }
+  .inv-card-header > div {
+    text-align: left !important;
+  }
+  .bp-table thead {
+    display: none !important;
+  }
+  .bp-table tr {
+    display: block !important;
+    border-bottom: 1.5px solid #f1f5f9 !important;
+    padding: 12px 0 !important;
+  }
+  .bp-table td {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 8px 0 !important;
+    border: none !important;
+    text-align: right !important;
+    width: 100% !important;
+  }
+  .bp-table td::before {
+    content: attr(data-label) !important;
+    font-weight: 700 !important;
+    color: #64748b !important;
+    font-size: 12px !important;
+    text-align: left !important;
+  }
+  .bp-table td:last-child {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+  }
+  .bp-card-body {
+    padding: 16px !important;
+  }
+  .inv-row-totals {
+    width: 100% !important;
+  }
+}
+</style>
 <div class="bp-content">
 <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
   <a href="<?=BASE_URL?>/client/invoices.php" class="bp-btn bp-btn-outline bp-btn-sm">← Back</a>
@@ -58,7 +105,7 @@ include dirname(dirname(__FILE__)).'/partials/header.php';
 <div class="row g-4">
   <div class="col-lg-8">
     <div class="bp-card">
-      <div style="background:linear-gradient(135deg,#0f172a,#1e3a5f);padding:28px;display:flex;justify-content:space-between;align-items:center">
+      <div class="inv-card-header" style="background:linear-gradient(135deg,#0f172a,#1e3a5f);padding:28px;display:flex;justify-content:space-between;align-items:center">
         <div><div style="color:rgba(255,255,255,.5);font-size:11px;font-weight:700;text-transform:uppercase">Invoice</div><div style="color:#fff;font-size:22px;font-weight:800">#<?=h($inv['invoice_number'])?></div></div>
         <div style="text-align:right"><div style="color:rgba(255,255,255,.5);font-size:11px;margin-bottom:4px">Amount Due</div><div style="color:#fff;font-size:26px;font-weight:900"><?=format_currency($inv['total'],$currency)?></div></div>
       </div>
@@ -81,11 +128,16 @@ include dirname(dirname(__FILE__)).'/partials/header.php';
           <thead><tr><th>Description</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Total</th></tr></thead>
           <tbody>
             <?php foreach($items as $item):?>
-            <tr><td><?=h($item['description'])?></td><td style="text-align:center"><?=$item['quantity']?></td><td style="text-align:right"><?=format_currency($item['unit_price'],$currency)?></td><td style="text-align:right;font-weight:600"><?=format_currency($item['total'],$currency)?></td></tr>
+            <tr>
+              <td data-label="Description"><?=h($item['description'])?></td>
+              <td data-label="Qty" style="text-align:center"><?=$item['quantity']?></td>
+              <td data-label="Unit Price" style="text-align:right"><?=format_currency($item['unit_price'],$currency)?></td>
+              <td data-label="Total" style="text-align:right;font-weight:600"><?=format_currency($item['total'],$currency)?></td>
+            </tr>
             <?php endforeach?>
           </tbody>
         </table>
-        <div style="display:flex;justify-content:flex-end"><div style="width:260px">
+        <div style="display:flex;justify-content:flex-end"><div class="inv-row-totals" style="width:260px">
           <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b"><span>Subtotal</span><span><?=format_currency($inv['subtotal'],$currency)?></span></div>
           <?php if($inv['tax_amount']>0):?><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px;color:#64748b"><span><?=h($tax_name)?></span><span><?=format_currency($inv['tax_amount'],$currency)?></span></div><?php endif?>
           <?php if($inv['discount_amount']>0):?><div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px;color:#10b981"><span>Discount</span><span>-<?=format_currency($inv['discount_amount'],$currency)?></span></div><?php endif?>
@@ -128,7 +180,36 @@ include dirname(dirname(__FILE__)).'/partials/header.php';
               <?php if($cr_on):?><option value="crypto">Cryptocurrency</option><?php endif?>
             </select>
           </div>
-          <?php if($bt_on):?><div id="d-bank_transfer" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;margin-bottom:12px;white-space:pre-line"><?=h(DB::setting('bank_transfer_details'))?></div><?php endif?>
+          <?php if($bt_on):?>
+          <div id="d-bank_transfer" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;font-size:13px;margin-bottom:16px">
+            <div style="font-weight:700;color:#0f172a;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+              <span>🏦</span> Bank Transfer Details
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <?php
+              $details = Billing::getBankDetails($inv_id);
+              $lines = explode("\n", $details);
+              foreach ($lines as $line) {
+                  $parts = explode(":", $line, 2);
+                  if (count($parts) === 2 && !empty(trim($parts[0]))) {
+                      $label = trim($parts[0]);
+                      $val = trim($parts[1]);
+                      echo '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed #f1f5f9;padding-bottom:6px;">';
+                      echo '<span style="color:#64748b;font-weight:500;">' . h($label) . '</span>';
+                      if (stripos($label, 'Number') !== false) {
+                          echo '<span style="font-family:monospace;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:4px;">' . h($val) . ' <button type="button" onclick="navigator.clipboard.writeText(\''.addslashes($val).'\');alert(\'Account number copied!\')" style="border:none;background:none;cursor:pointer;padding:2px;font-size:12px;" title="Copy">📋</button></span>';
+                      } else {
+                          echo '<span style="font-weight:600;color:#0f172a;text-align:right;">' . h($val) . '</span>';
+                      }
+                      echo '</div>';
+                  } else if (!empty(trim($line))) {
+                      echo '<div style="color:#374151;font-weight:500;padding:4px 0;">' . h($line) . '</div>';
+                  }
+              }
+              ?>
+            </div>
+          </div>
+          <?php endif?>
           <?php if($cr_on):?><div id="d-crypto" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;margin-bottom:12px;white-space:pre-line;display:none"><?=h(DB::setting('crypto_details'))?></div><?php endif?>
           <div class="bp-form-group"><label class="bp-label">Transaction Reference *</label><input type="text" name="reference" class="bp-input" placeholder="Transaction ID / Hash" required></div>
           <div class="bp-form-group"><label class="bp-label">Notes</label><textarea name="payment_notes" class="bp-textarea" rows="2"></textarea></div>

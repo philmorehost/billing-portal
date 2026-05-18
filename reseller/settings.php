@@ -13,10 +13,11 @@ if(is_post()&&csrf_verify()){
     if($action==='branding'){
         $bn=trim(post('branding_name')); $bc=trim(post('branding_color','#0f172a'));
         $markup=(float)post('markup_percentage',20);
+        $bank_details=trim(post('bank_transfer_details'));
         // Validate hex color
         if(!preg_match('/^#[0-9a-f]{6}$/i',$bc)) $bc='#0f172a';
-        DB::execute("UPDATE resellers SET branding_name=?,branding_color=?,markup_percentage=? WHERE id=?",'ssdi',[$bn,$bc,$markup,$reseller_id]);
-        $success='Branding settings saved.';
+        DB::execute("UPDATE resellers SET branding_name=?,branding_color=?,markup_percentage=?,bank_transfer_details=? WHERE id=?",'ssdsi',[$bn,$bc,$markup,$bank_details,$reseller_id]);
+        $success='Branding & Payment settings saved.';
         $reseller=DB::row("SELECT * FROM resellers WHERE id=?",'i',[$reseller_id]);
     }
     if($action==='domain'){
@@ -70,6 +71,10 @@ include 'partials/header.php';
         <div class="bp-form-group"><label class="bp-label">Your Retail Markup (%)</label>
           <input type="number" name="markup_percentage" class="bp-input" value="<?=h($reseller['markup_percentage']??20)?>" step="0.1" min="0" max="500">
           <div class="bp-input-hint">You buy at wholesale price. This % is added on top for your clients.</div>
+        </div>
+        <div class="bp-form-group"><label class="bp-label">Manual Bank Transfer Details</label>
+          <textarea name="bank_transfer_details" class="bp-textarea" rows="4" placeholder="Bank Name:&#10;Account Name:&#10;Account Number:"><?=h($reseller['bank_transfer_details']??'')?></textarea>
+          <div class="bp-input-hint">Provide bank details where clients can send payments manually. If left blank, it will automatically fallback to the system default details.</div>
         </div>
         <!-- Preview -->
         <div style="background:<?=h($reseller['branding_color']??'#0f172a')?>;border-radius:12px;padding:16px 20px;margin:16px 0;display:flex;align-items:center;gap:12px" id="preview">

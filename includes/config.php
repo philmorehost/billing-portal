@@ -41,6 +41,58 @@ foreach (['db','functions','auth','mailer'] as $f) {
 if (class_exists('DB') && file_exists($config_file)) {
     require_once INC_PATH . '/modules/reseller.php';
     try {
+        // Auto-migrate: check if resellers has bank_transfer_details column
+        $cols = DB::rows("SHOW COLUMNS FROM resellers LIKE 'bank_transfer_details'");
+        if (empty($cols)) {
+            DB::execute("ALTER TABLE resellers ADD COLUMN bank_transfer_details TEXT DEFAULT NULL");
+        }
+
+        // Auto-migrate email template: upgrade invoice_created to responsive summary layout
+        $tmpl = DB::row("SELECT body_html FROM email_templates WHERE slug='invoice_created'");
+        if ($tmpl && strpos($tmpl['body_html'], '{invoice_items}') === false) {
+            $new_body = '<p>Dear {client_name},</p>
+<p>This is a notice that invoice <strong>#{invoice_number}</strong> is now due on {due_date}. Please find the invoice summary below:</p>
+
+<div style="overflow-x: auto; margin: 20px 0;">
+  <table style="width: 100%; border-collapse: collapse; border: 1px solid #edf2f7; border-radius: 8px; font-size: 14px;">
+    <thead>
+      <tr style="background-color: #f7fafc;">
+        <th style="padding: 12px; text-align: left; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #718096; border-bottom: 2px solid #edf2f7;">Description</th>
+        <th style="padding: 12px; text-align: center; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #718096; border-bottom: 2px solid #edf2f7; width: 50px;">Qty</th>
+        <th style="padding: 12px; text-align: right; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #718096; border-bottom: 2px solid #edf2f7; width: 100px;">Price</th>
+        <th style="padding: 12px; text-align: right; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #718096; border-bottom: 2px solid #edf2f7; width: 100px;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {invoice_items}
+    </tbody>
+  </table>
+</div>
+
+<table align="right" style="width: 260px; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;">
+  <tr>
+    <td style="padding: 6px 0; border-bottom: 1px solid #edf2f7; color: #718096;">Subtotal:</td>
+    <td style="padding: 6px 0; border-bottom: 1px solid #edf2f7; text-align: right; color: #2d3748; font-weight: 500;">{subtotal}</td>
+  </tr>
+  <tr>
+    <td style="padding: 6px 0; border-bottom: 1px solid #edf2f7; color: #718096;">Tax/VAT:</td>
+    <td style="padding: 6px 0; border-bottom: 1px solid #edf2f7; text-align: right; color: #2d3748; font-weight: 500;">{tax_amount}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 0; font-size: 16px; font-weight: bold; color: #2d3748;">Total Due:</td>
+    <td style="padding: 12px 0; font-size: 16px; font-weight: 800; text-align: right; color: #0f172a;">{invoice_total}</td>
+  </tr>
+</table>
+<div style="clear: both;"></div>
+
+{bank_details}
+
+<p style="margin-top: 30px; text-align: center; clear: both;">
+  <a href="{invoice_url}" class="btn" style="background-color: #0f172a; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 14px;">Pay Invoice Online &rarr;</a>
+</p>';
+            DB::execute("UPDATE email_templates SET body_html=? WHERE slug='invoice_created'", 's', [$new_body]);
+        }
+
         $reseller_host = Reseller::detectFromHost();
         if ($reseller_host) {
             $_SESSION['reseller_domain_id']  = $reseller_host['id'];

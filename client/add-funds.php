@@ -122,7 +122,34 @@ include 'partials/header.php';
 
           <!-- Bank/crypto details -->
           <?php if($bt_on):?>
-          <div id="d-bank_transfer" style="display:none;background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:16px;font-size:13px;white-space:pre-line"><?=h(DB::setting('bank_transfer_details'))?></div>
+          <div id="d-bank_transfer" style="display:none;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:16px;font-size:13px;margin-bottom:16px">
+            <div style="font-weight:700;color:#0f172a;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+              <span>🏦</span> Bank Transfer Details
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <?php
+              $details = Billing::getBankDetails(0);
+              $lines = explode("\n", $details);
+              foreach ($lines as $line) {
+                  $parts = explode(":", $line, 2);
+                  if (count($parts) === 2 && !empty(trim($parts[0]))) {
+                      $label = trim($parts[0]);
+                      $val = trim($parts[1]);
+                      echo '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed #f1f5f9;padding-bottom:6px;">';
+                      echo '<span style="color:#64748b;font-weight:500;">' . h($label) . '</span>';
+                      if (stripos($label, 'Number') !== false) {
+                          echo '<span style="font-family:monospace;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:4px;">' . h($val) . ' <button type="button" onclick="navigator.clipboard.writeText(\''.addslashes($val).'\');alert(\'Account number copied!\')" style="border:none;background:none;cursor:pointer;padding:2px;font-size:12px;" title="Copy">📋</button></span>';
+                      } else {
+                          echo '<span style="font-weight:600;color:#0f172a;text-align:right;">' . h($val) . '</span>';
+                      }
+                      echo '</div>';
+                  } else if (!empty(trim($line))) {
+                      echo '<div style="color:#374151;font-weight:500;padding:4px 0;">' . h($line) . '</div>';
+                  }
+              }
+              ?>
+            </div>
+          </div>
           <?php endif?>
           <?php if($cr_on):?>
           <div id="d-crypto" style="display:none;background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:16px;font-size:13px;white-space:pre-line"><?=h(DB::setting('crypto_details'))?></div>

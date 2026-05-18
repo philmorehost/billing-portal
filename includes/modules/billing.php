@@ -259,4 +259,36 @@ class Billing {
         }
         return ['success' => true, 'data' => $resp['data']];
     }
+
+    public static function getBankDetails(int $inv_id): string {
+        // 1. Try to find the reseller linked to the invoice order
+        $reseller = DB::row("
+            SELECT r.bank_transfer_details 
+            FROM invoices i 
+            JOIN orders o ON o.id = i.order_id 
+            JOIN resellers r ON r.id = o.reseller_id 
+            WHERE i.id = ?
+        ", 'i', [$inv_id]);
+
+        // 2. If not found via order, check if there's a reseller domain session active
+        if (empty($reseller) && !empty($_SESSION['reseller_domain_id'])) {
+            $reseller = DB::row("SELECT bank_transfer_details FROM resellers WHERE id = ?", 'i', [$_SESSION['reseller_domain_id']]);
+        }
+
+        // 3. If reseller bank details are set and not placeholder/empty, return them
+        if (!empty($reseller) && !empty(trim($reseller['bank_transfer_details']))) {
+            $details = trim($reseller['bank_transfer_details']);
+            if (stripos($details, 'Bank: N/A') === false && stripos($details, 'Account Number: N/A') === false) {
+                return $details;
+            }
+        }
+
+        // 4. Fallback to super admin bank transfer details from settings
+        $admin_details = DB::setting('bank_transfer_details');
+        if (empty($admin_details) || stripos($admin_details, 'Bank: N/A') !== false || stripos($admin_details, 'Account Number: N/A') !== false || trim($admin_details) === "Bank: \nAccount Name: \nAccount Number:") {
+            $company = DB::setting('company_name', 'Philmore Host');
+            return "Bank: United Bank for Africa (UBA)\nAccount Name: {$company}\nAccount Number: 1022394012";
+        }
+        return $admin_details;
+    }
 }
