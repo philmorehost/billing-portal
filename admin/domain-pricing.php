@@ -6,7 +6,7 @@ $page_title='Domain Pricing Management';
 $currency=DB::setting('base_currency','NGN');
 $success=''; $error='';
 
-// 1. Sync from ConnectReseller
+// 1. Sync from ConnectReseller (Fully corrected parsing structure for responseMsg list)
 if(is_post() && post('action') === 'sync_tlds' && csrf_verify()) {
     $apiKey = DB::setting('module_connectreseller_api_key');
     if (empty($apiKey)) {
@@ -29,16 +29,26 @@ if(is_post() && post('action') === 'sync_tlds' && csrf_verify()) {
             $tldList = [];
             
             if (is_array($data)) {
-                if (isset($data['responseData']) && is_array($data['responseData'])) {
+                // ConnectReseller standard: TLD list is array in the 'responseMsg' key
+                if (isset($data['responseMsg']) && is_array($data['responseMsg'])) {
+                    $first = reset($data['responseMsg']);
+                    if (is_array($first) && (isset($first['tld']) || isset($first['registrationPrice']))) {
+                        $tldList = $data['responseMsg'];
+                    } else if (isset($data['responseMsg']['statusCode']) && $data['responseMsg']['statusCode'] != 200) {
+                        $error = "ConnectReseller API Error: " . ($data['responseMsg']['message'] ?? 'Unknown');
+                    }
+                }
+                
+                // Fallback to 'responseData' wrapper
+                if (empty($tldList) && empty($error) && isset($data['responseData']) && is_array($data['responseData'])) {
                     $tldList = $data['responseData'];
-                } elseif (isset($data['responseMsg']['statusCode']) && $data['responseMsg']['statusCode'] != 200) {
-                    $error = "ConnectReseller API Error: " . ($data['responseMsg']['message'] ?? 'Unknown');
-                } else {
+                }
+                
+                // Fallback to root-level array
+                if (empty($tldList) && empty($error)) {
                     $first = reset($data);
                     if (is_array($first) && (isset($first['tld']) || isset($first['registrationPrice']))) {
                         $tldList = $data;
-                    } else {
-                        $error = "ConnectReseller Response Error: " . ($data['responseMsg']['message'] ?? 'Invalid response format.');
                     }
                 }
             } else {
@@ -89,7 +99,7 @@ if(is_post() && post('action') === 'sync_tlds' && csrf_verify()) {
                     $synced++;
                 }
                 $success = "Successfully synchronized {$synced} domain extension(s) from ConnectReseller!";
-            } elseif (empty($error)) {
+            } else if (empty($error)) {
                 $error = "No active domain extensions found in the API response.";
             }
         }
@@ -175,57 +185,35 @@ if(is_post() && post('action') === 'sync_resellerclub' && csrf_verify()) {
     }
 }
 
-// 3. Manually Create Domain Extension
-if(is_post() && post('action') === 'add_tld' && csrf_verify()) {
-    $tld = strtolower(trim(post('tld')));
-    $tld = ltrim($tld, '.');
-    
-    if (empty($tld)) {
-        $error = "Extension name cannot be empty.";
-    } else {
-        $existing = DB::row("SELECT id FROM domain_tlds WHERE tld=?", 's', [$tld]);
-        if ($existing) {
-            $error = "The extension .{$tld} already exists.";
-        } else {
-            $registrar = trim(post('registrar', 'none'));
-            $base_reg = (float)post('base_price_register');
-            $base_ren = (float)post('base_price_renew');
-            $base_tr  = (float)post('base_price_transfer');
-            $markup_type = post('markup_type') === 'fixed' ? 'fixed' : 'percentage';
-            $markup_val = (float)post('markup_value');
-            
-            $retail_reg = (float)post('retail_price_register');
-            $retail_ren = (float)post('retail_price_renew');
-            $retail_tr  = (float)post('retail_price_transfer');
-            
-            if ($retail_reg <= 0) {
-                $retail_reg = ($markup_type === 'percentage') ? round($base_reg * (1 + $markup_val / 100), 2) : round($base_reg + $markup_val, 2);
-            }
-            if ($retail_ren <= 0) {
-                $retail_ren = ($markup_type === 'percentage') ? round($base_ren * (1 + $markup_val / 100), 2) : round($base_ren + $markup_val, 2);
-            }
-            if ($retail_tr <= 0) {
-                $retail_tr = ($markup_type === 'percentage') ? round($base_tr * (1 + $markup_val / 100), 2) : round($base_tr + $markup_val, 2);
-            }
-            
-            $status = post('status') === 'inactive' ? 'inactive' : 'active';
-            
+// 3. Save All Inline Features & Registrars (WHMCS Style bulk update)
+if(is_post() && post('action') === 'save_all_tlds' && csrf_verify()) {
+    $tld_data = $_POST['tlds'] ?? [];
+    if (is_array($tld_data)) {
+        foreach ($tld_data as $id => $data) {
+            $id = (int)$id;
+            $registrar = trim($data['registrar'] ?? 'none');
+            $dns = isset($data['dns_management']) ? 1 : 0;
+            $email = isset($data['email_forwarding']) ? 1 : 0;
+            $id_prot = isset($data['id_protection']) ? 1 : 0;
+            $epp = isset($data['epp_code']) ? 1 : 0;
+            $status = isset($data['status']) ? 'active' : 'inactive';
+
             DB::execute(
-                "INSERT INTO domain_tlds (tld, registrar, base_price_register, base_price_renew, base_price_transfer, markup_type, markup_value, retail_price_register, retail_price_renew, retail_price_transfer, status) VALUES (?,?,?,?,?,?, ?,?,?,?, ?)",
-                'ssdddsdddds', [$tld, $registrar, $base_reg, $base_ren, $base_tr, $markup_type, $markup_val, $retail_reg, $retail_ren, $retail_tr, $status]
+                "UPDATE domain_tlds SET registrar=?, dns_management=?, email_forwarding=?, id_protection=?, epp_code=?, status=? WHERE id=?",
+                'siiiisi', [$registrar, $dns, $email, $id_prot, $epp, $status, $id]
             );
-            $success = "Successfully added domain extension .{$tld}!";
         }
+        $success = "All domain features, routings, and statuses saved successfully!";
     }
 }
 
-// 4. Update Single TLD Markup Config / Manually adjust prices
-if(is_post() && post('action') === 'update_tld' && csrf_verify()) {
+// 4. Save Single TLD Pricing Modal Config
+if(is_post() && post('action') === 'save_tld_pricing' && csrf_verify()) {
     $tld_id = (int)post('tld_id');
-    $registrar = trim(post('registrar', 'none'));
     $base_reg = (float)post('base_price_register');
     $base_ren = (float)post('base_price_renew');
     $base_tr  = (float)post('base_price_transfer');
+    
     $markup_type = post('markup_type') === 'fixed' ? 'fixed' : 'percentage';
     $markup_val = (float)post('markup_value');
     
@@ -242,17 +230,49 @@ if(is_post() && post('action') === 'update_tld' && csrf_verify()) {
     if ($retail_tr <= 0) {
         $retail_tr = ($markup_type === 'percentage') ? round($base_tr * (1 + $markup_val / 100), 2) : round($base_tr + $markup_val, 2);
     }
-    
-    $status = post('status') === 'inactive' ? 'inactive' : 'active';
 
     DB::execute(
-        "UPDATE domain_tlds SET registrar=?, base_price_register=?, base_price_renew=?, base_price_transfer=?, markup_type=?, markup_value=?, retail_price_register=?, retail_price_renew=?, retail_price_transfer=?, status=? WHERE id=?",
-        'sdddsddddsi', [$registrar, $base_reg, $base_ren, $base_tr, $markup_type, $markup_val, $retail_reg, $retail_ren, $retail_tr, $status, $tld_id]
+        "UPDATE domain_tlds SET base_price_register=?, base_price_renew=?, base_price_transfer=?, markup_type=?, markup_value=?, retail_price_register=?, retail_price_renew=?, retail_price_transfer=? WHERE id=?",
+        'ddddsdddi', [$base_reg, $base_ren, $base_tr, $markup_type, $markup_val, $retail_reg, $retail_ren, $retail_tr, $tld_id]
     );
-    $success = "Domain extension pricing and API routing updated successfully.";
+    $success = "Pricing structures updated successfully.";
 }
 
-// 5. Bulk Apply Markup Action
+// 5. Add Custom TLD Inline
+if(is_post() && post('action') === 'add_tld_inline' && csrf_verify()) {
+    $tld = strtolower(trim(post('tld')));
+    $tld = ltrim($tld, '.');
+    
+    if (empty($tld)) {
+        $error = "Domain extension name cannot be empty.";
+    } else {
+        $existing = DB::row("SELECT id FROM domain_tlds WHERE tld=?", 's', [$tld]);
+        if ($existing) {
+            $error = "The extension .{$tld} already exists.";
+        } else {
+            $registrar = trim(post('registrar', 'none'));
+            $dns = isset($_POST['dns_management']) ? 1 : 0;
+            $email = isset($_POST['email_forwarding']) ? 1 : 0;
+            $id_prot = isset($_POST['id_protection']) ? 1 : 0;
+            $epp = isset($_POST['epp_code']) ? 1 : 0;
+            
+            DB::execute(
+                "INSERT INTO domain_tlds (tld, registrar, base_price_register, base_price_renew, base_price_transfer, markup_type, markup_value, retail_price_register, retail_price_renew, retail_price_transfer, dns_management, email_forwarding, id_protection, epp_code, status) VALUES (?,?,0.00,0.00,0.00,'percentage',20.00,0.00,0.00,0.00,?,?,?,?, 'active')",
+                'ssiiii', [$tld, $registrar, $dns, $email, $id_prot, $epp]
+            );
+            $success = "Successfully added domain extension .{$tld}!";
+        }
+    }
+}
+
+// 6. Delete TLD Extension
+if(is_post() && post('action') === 'delete_tld' && csrf_verify()) {
+    $tld_id = (int)post('tld_id');
+    DB::execute("DELETE FROM domain_tlds WHERE id=?", 'i', [$tld_id]);
+    $success = "Domain extension deleted successfully.";
+}
+
+// 7. Bulk Apply Markup Action
 if(is_post() && post('action') === 'bulk_markup' && csrf_verify()) {
     $markup_val = (float)post('bulk_markup_value');
     $markup_type = post('bulk_markup_type') === 'fixed' ? 'fixed' : 'percentage';
@@ -289,25 +309,22 @@ include 'partials/header.php';
 <div class="bp-content">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
     <div>
-      <h1 class="bp-page-title" style="margin-bottom:4px">🌐 Domain Pricing Sync & Registrar Routing</h1>
-      <p class="bp-page-sub">Manage your TLD extensions, define wholesale cost limits, calculate retail prices, and map them to their corresponding APIs.</p>
+      <h1 class="bp-page-title" style="margin-bottom:4px">🌐 WHMCS Domain Pricing & Registrar Config</h1>
+      <p class="bp-page-sub">Configure auto-registration registrars, TLD pricing models, and client features (DNS, Forwarding, EPP) on a per-extension basis.</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="bp-btn bp-btn-success" onclick="openAddModal()">
-        ➕ Add Custom TLD Manually
-      </button>
       <form method="POST" style="display:inline-block">
         <?=csrf_input()?>
         <input type="hidden" name="action" value="sync_tlds">
         <button type="submit" class="bp-btn bp-btn-primary">
-          🔄 Sync ConnectReseller
+          🔄 Sync ConnectReseller TLDs
         </button>
       </form>
       <form method="POST" style="display:inline-block">
         <?=csrf_input()?>
         <input type="hidden" name="action" value="sync_resellerclub">
         <button type="submit" class="bp-btn bp-btn-accent">
-          🔄 Sync ResellerClub
+          🔄 Sync ResellerClub TLDs
         </button>
       </form>
     </div>
@@ -317,9 +334,129 @@ include 'partials/header.php';
   <?php if($success):?><div class="alert-custom alert-success mb-3"><span>✓</span> <?=h($success)?></div><?php endif?>
 
   <div class="row g-4">
-    <!-- Bulk Markup Card -->
-    <div class="col-lg-3">
+    <!-- Grid System containing main configurations -->
+    <div class="col-lg-9">
       <div class="bp-card">
+        <div class="bp-card-header">
+          <h3 class="bp-card-title">Domain TLD List & Auto-Registration Settings</h3>
+        </div>
+        
+        <form method="POST" id="whmcs-pricing-form">
+          <?=csrf_input()?>
+          <input type="hidden" name="action" value="save_all_tlds">
+          
+          <div style="overflow-x:auto">
+            <table class="bp-table" style="min-width: 900px;">
+              <thead>
+                <tr>
+                  <th style="width:50px">Active</th>
+                  <th>TLD</th>
+                  <th style="width:110px;text-align:center">Pricing</th>
+                  <th style="text-align:center">DNS Management</th>
+                  <th style="text-align:center">Email Forwarding</th>
+                  <th style="text-align:center">ID Protection</th>
+                  <th style="text-align:center">EPP Code</th>
+                  <th>Auto Registration</th>
+                  <th style="text-align:right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if(empty($tlds)):?>
+                  <tr>
+                    <td colspan="9" style="text-align:center;padding:40px;color:#94a3b8">
+                      <div style="font-size:32px;margin-bottom:8px">📡</div>
+                      <strong>No domain extensions found.</strong><br>Use one of the "Sync" buttons above or use the "Add TLD" row below to initialize.
+                    </td>
+                  </tr>
+                <?php else: foreach($tlds as $t):?>
+                  <tr>
+                    <td style="text-align:center">
+                      <input type="checkbox" name="tlds[<?=$t['id']?>][status]" value="active" <?=$t['status']==='active'?'checked':''?> style="transform:scale(1.2);cursor:pointer">
+                    </td>
+                    <td style="font-weight:700;color:#0f172a;font-family:monospace;font-size:16px">.<?=h($t['tld'])?></td>
+                    <td style="text-align:center">
+                      <button type="button" class="bp-btn bp-btn-outline bp-btn-sm" style="font-size:11px;padding:4px 10px;border-radius:4px" onclick='openPricingModal(<?=json_encode($t, JSON_HEX_APOS | JSON_HEX_QUOT)?>)'>
+                        💲 Pricing
+                      </button>
+                    </td>
+                    <td style="text-align:center">
+                      <input type="checkbox" name="tlds[<?=$t['id']?>][dns_management]" value="1" <?=$t['dns_management']?'checked':''?> style="transform:scale(1.2);cursor:pointer">
+                    </td>
+                    <td style="text-align:center">
+                      <input type="checkbox" name="tlds[<?=$t['id']?>][email_forwarding]" value="1" <?=$t['email_forwarding']?'checked':''?> style="transform:scale(1.2);cursor:pointer">
+                    </td>
+                    <td style="text-align:center">
+                      <input type="checkbox" name="tlds[<?=$t['id']?>][id_protection]" value="1" <?=$t['id_protection']?'checked':''?> style="transform:scale(1.2);cursor:pointer">
+                    </td>
+                    <td style="text-align:center">
+                      <input type="checkbox" name="tlds[<?=$t['id']?>][epp_code]" value="1" <?=$t['epp_code']?'checked':''?> style="transform:scale(1.2);cursor:pointer">
+                    </td>
+                    <td>
+                      <select name="tlds[<?=$t['id']?>][registrar]" class="bp-select" style="padding:4px 8px;font-size:12px;height:auto">
+                        <option value="none" <?=$t['registrar']==='none'?'selected':''?>>None (Manual)</option>
+                        <option value="connectreseller" <?=$t['registrar']==='connectreseller'?'selected':''?>>ConnectReseller</option>
+                        <option value="resellerclub" <?=$t['registrar']==='resellerclub'?'selected':''?>>ResellerClub</option>
+                        <option value="upperlink" <?=$t['registrar']==='upperlink'?'selected':''?>>Upperlink (.NG)</option>
+                      </select>
+                    </td>
+                    <td style="text-align:right">
+                      <button type="button" class="bp-btn bp-btn-outline bp-btn-sm" style="color:#ef4444;border-color:rgba(239,68,68,0.2)" onclick="confirmDelete(<?=$t['id']?>, '.<?=h($t['tld'])?>')">
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                <?php endforeach; endif;?>
+                
+                <!-- Bottom "Add TLD" Row in Grid (WHMCS Style) -->
+                <tr style="background:#f8fafc;border-top:2px solid #e2e8f0">
+                  <td style="text-align:center">💡</td>
+                  <td>
+                    <input type="text" id="add-tld-name" placeholder="eg. com" class="bp-input" style="padding:4px 8px;font-size:12px;height:auto;font-family:monospace">
+                  </td>
+                  <td style="text-align:center;font-size:11px;color:#94a3b8">New TLD</td>
+                  <td style="text-align:center">
+                    <input type="checkbox" id="add-dns" value="1" checked style="transform:scale(1.2);cursor:pointer">
+                  </td>
+                  <td style="text-align:center">
+                    <input type="checkbox" id="add-email" value="1" checked style="transform:scale(1.2);cursor:pointer">
+                  </td>
+                  <td style="text-align:center">
+                    <input type="checkbox" id="add-id" value="1" style="transform:scale(1.2);cursor:pointer">
+                  </td>
+                  <td style="text-align:center">
+                    <input type="checkbox" id="add-epp" value="1" checked style="transform:scale(1.2);cursor:pointer">
+                  </td>
+                  <td>
+                    <select id="add-registrar" class="bp-select" style="padding:4px 8px;font-size:12px;height:auto">
+                      <option value="none">None (Manual)</option>
+                      <option value="connectreseller">ConnectReseller</option>
+                      <option value="resellerclub">ResellerClub</option>
+                      <option value="upperlink">Upperlink (.NG)</option>
+                    </select>
+                  </td>
+                  <td style="text-align:right">
+                    <button type="button" class="bp-btn bp-btn-success bp-btn-sm" style="padding:4px 10px;font-size:11px" onclick="submitAddInline()">
+                      ➕ Add
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <div style="display:flex;justify-content:space-between;padding:16px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom-left-radius:12px;border-bottom-right-radius:12px">
+            <span style="font-size:12px;color:#64748b;align-self:center">💡 Don't forget to click Save Changes to persist checkbox & registrar changes!</span>
+            <button type="submit" class="bp-btn bp-btn-primary">
+              💾 Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Bulk Markup & Sidebar Features -->
+    <div class="col-lg-3">
+      <div class="bp-card mb-4">
         <div class="bp-card-header"><h3 class="bp-card-title">📈 Bulk Profit Markup</h3></div>
         <div class="bp-card-body">
           <form method="POST">
@@ -346,128 +483,76 @@ include 'partials/header.php';
           </form>
         </div>
       </div>
-    </div>
-
-    <!-- Active Extensions Table -->
-    <div class="col-lg-9">
+      
       <div class="bp-card">
-        <div class="bp-card-header">
-          <h3 class="bp-card-title">Domain Extensions & Registrar Settings (<?=count($tlds)?>)</h3>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="bp-table">
-            <thead>
-              <tr>
-                <th>TLD</th>
-                <th>API Registrar</th>
-                <th>Wholesale Base Cost</th>
-                <th>Profit Margin</th>
-                <th>Retail Customer Price</th>
-                <th>Status</th>
-                <th style="text-align:right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if(empty($tlds)):?>
-                <tr>
-                  <td colspan="7" style="text-align:center;padding:40px;color:#94a3b8">
-                    <div style="font-size:32px;margin-bottom:8px">📡</div>
-                    <strong>No domain extensions found.</strong><br>Use one of the "Sync" buttons above or click "Add Custom TLD Manually" to create your list.
-                  </td>
-                </tr>
-              <?php else: foreach($tlds as $t):?>
-                <tr>
-                  <td style="font-weight:700;color:#0f172a;font-family:monospace;font-size:15px">.<?=h($t['tld'])?></td>
-                  <td>
-                    <span class="bp-badge bp-badge-<?=($t['registrar']??'none')!=='none'?'primary':'secondary'?>" style="font-size:11px">
-                      <?=($t['registrar'] === 'connectreseller') ? 'ConnectReseller' : (($t['registrar'] === 'resellerclub') ? 'ResellerClub' : 'Manual')?>
-                    </span>
-                  </td>
-                  <td>
-                    <div style="font-size:12px;color:#64748b">Reg: $<?=number_format($t['base_price_register'], 2)?></div>
-                    <div style="font-size:12px;color:#64748b">Ren: $<?=number_format($t['base_price_renew'], 2)?></div>
-                    <div style="font-size:12px;color:#64748b">Tr: $<?=number_format($t['base_price_transfer'], 2)?></div>
-                  </td>
-                  <td>
-                    <span class="bp-badge bp-badge-info" style="font-size:11px">
-                      <?=h($t['markup_value'])?><?=$t['markup_type']==='percentage'?'%':' Flat'?>
-                    </span>
-                  </td>
-                  <td>
-                    <div style="font-weight:700;color:#10b981;font-size:13px"><?=format_currency($t['retail_price_register'],$currency)?></div>
-                    <div style="font-size:11px;color:#64748b">Renew: <?=format_currency($t['retail_price_renew'],$currency)?></div>
-                    <div style="font-size:11px;color:#64748b">Trans: <?=format_currency($t['retail_price_transfer'],$currency)?></div>
-                  </td>
-                  <td>
-                    <span class="bp-badge bp-badge-<?=$t['status']==='active'?'success':'danger'?>">
-                      <?=ucfirst($t['status'])?>
-                    </span>
-                  </td>
-                  <td style="text-align:right">
-                    <button class="bp-btn bp-btn-outline bp-btn-sm" onclick='editTld(<?=json_encode($t, JSON_HEX_APOS | JSON_HEX_QUOT)?>)'>
-                      ⚙ Edit Pricing
-                    </button>
-                  </td>
-                </tr>
-              <?php endforeach; endif;?>
-            </tbody>
-          </table>
+        <div class="bp-card-header"><h3 class="bp-card-title">🔌 Domain Registrars</h3></div>
+        <div class="bp-card-body" style="font-size:13px;color:#64748b;line-height:1.6">
+          <p>You can manage credentials and endpoints for registrars inside the <strong>Settings</strong> page.</p>
+          <hr style="border:0;border-top:1px solid #e2e8f0;margin:12px 0">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="color:#10b981">●</span> ConnectReseller: Active
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="color:#10b981">●</span> ResellerClub: Configured
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="color:#10b981">●</span> Upperlink: Active
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Manual Add TLD Modal Dialog -->
-<div id="add-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);z-index:999;align-items:center;justify-content:center">
+<!-- Helper forms for inline Add and inline Delete -->
+<form method="POST" id="inline-add-form" style="display:none">
+  <?=csrf_input()?>
+  <input type="hidden" name="action" value="add_tld_inline">
+  <input type="hidden" name="tld" id="form-add-tld">
+  <input type="hidden" name="registrar" id="form-add-registrar">
+  <input type="checkbox" name="dns_management" id="form-add-dns" value="1">
+  <input type="checkbox" name="email_forwarding" id="form-add-email" value="1">
+  <input type="checkbox" name="id_protection" id="form-add-id" value="1">
+  <input type="checkbox" name="epp_code" id="form-add-epp" value="1">
+</form>
+
+<form method="POST" id="delete-tld-form" style="display:none">
+  <?=csrf_input()?>
+  <input type="hidden" name="action" value="delete_tld">
+  <input type="hidden" name="tld_id" id="delete-tld-id">
+</form>
+
+<!-- Pricing Modal Dialog (Interactive Pricing configuration) -->
+<div id="pricing-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);z-index:999;align-items:center;justify-content:center">
   <div class="bp-card" style="width:520px;max-width:95%">
     <div class="bp-card-header">
-      <h3 class="bp-card-title">Add Custom TLD Extension</h3>
-      <button class="bp-btn bp-btn-outline bp-btn-sm" onclick="closeAddModal()">✕</button>
+      <h3 class="bp-card-title">Configure Pricing: <span id="pricing-tld-label" style="font-family:monospace;color:#3b82f6">.com</span></h3>
+      <button type="button" class="bp-btn bp-btn-outline bp-btn-sm" onclick="closePricingModal()">✕</button>
     </div>
     <div class="bp-card-body" style="max-height:80vh;overflow-y:auto">
       <form method="POST">
         <?=csrf_input()?>
-        <input type="hidden" name="action" value="add_tld">
-        
-        <div class="row">
-          <div class="col-md-6">
-            <div class="bp-form-group">
-              <label class="bp-label">Domain Extension (TLD)</label>
-              <input type="text" name="tld" class="bp-input" placeholder="e.g. com" required>
-              <div class="bp-input-hint">Do not include dot (e.g. use "com", "net.ng")</div>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <div class="bp-form-group">
-              <label class="bp-label">Registrar API Routing</label>
-              <select name="registrar" class="bp-select">
-                <option value="none">Manual Processing (None)</option>
-                <option value="connectreseller">ConnectReseller Module</option>
-                <option value="resellerclub">ResellerClub Module</option>
-              </select>
-            </div>
-          </div>
-        </div>
+        <input type="hidden" name="action" value="save_tld_pricing">
+        <input type="hidden" name="tld_id" id="pricing-tld-id">
 
         <div style="font-weight:700;font-size:12px;text-transform:uppercase;color:#64748b;margin-bottom:12px;border-bottom:1px solid #e2e8f0;padding-bottom:6px">💰 Wholesale Cost Prices (USD)</div>
         <div class="row">
           <div class="col-md-4">
             <div class="bp-form-group">
               <label class="bp-label">Register Cost ($)</label>
-              <input type="number" name="base_price_register" class="bp-input" step="0.01" value="0.00" required>
+              <input type="number" name="base_price_register" id="p-base-reg" class="bp-input" step="0.01" required>
             </div>
           </div>
           <div class="col-md-4">
             <div class="bp-form-group">
               <label class="bp-label">Renew Cost ($)</label>
-              <input type="number" name="base_price_renew" class="bp-input" step="0.01" value="0.00" required>
+              <input type="number" name="base_price_renew" id="p-base-ren" class="bp-input" step="0.01" required>
             </div>
           </div>
           <div class="col-md-4">
             <div class="bp-form-group">
               <label class="bp-label">Transfer Cost ($)</label>
-              <input type="number" name="base_price_transfer" class="bp-input" step="0.01" value="0.00" required>
+              <input type="number" name="base_price_transfer" id="p-base-tr" class="bp-input" step="0.01" required>
             </div>
           </div>
         </div>
@@ -477,7 +562,7 @@ include 'partials/header.php';
           <div class="col-md-6">
             <div class="bp-form-group">
               <label class="bp-label">Markup Type</label>
-              <select name="markup_type" class="bp-select">
+              <select name="markup_type" id="p-markup-type" class="bp-select">
                 <option value="percentage">Percentage (%)</option>
                 <option value="fixed">Fixed flat margin (<?=h($currency)?>)</option>
               </select>
@@ -486,7 +571,7 @@ include 'partials/header.php';
           <div class="col-md-6">
             <div class="bp-form-group">
               <label class="bp-label">Profit Markup Value</label>
-              <input type="number" name="markup_value" class="bp-input" step="0.01" value="20.00" required>
+              <input type="number" name="markup_value" id="p-markup-val" class="bp-input" step="0.01" required>
             </div>
           </div>
         </div>
@@ -496,144 +581,27 @@ include 'partials/header.php';
           <div class="col-md-4">
             <div class="bp-form-group">
               <label class="bp-label">Register Price</label>
-              <input type="number" name="retail_price_register" class="bp-input" step="0.01" value="0.00" placeholder="Auto-calculated">
-              <div class="bp-input-hint">Leave 0 to auto-apply profit rule</div>
+              <input type="number" name="retail_price_register" id="p-retail-reg" class="bp-input" step="0.01" required>
+              <div class="bp-input-hint">Enter custom or 0 to auto-compute</div>
             </div>
           </div>
           <div class="col-md-4">
             <div class="bp-form-group">
               <label class="bp-label">Renewal Price</label>
-              <input type="number" name="retail_price_renew" class="bp-input" step="0.01" value="0.00" placeholder="Auto-calculated">
+              <input type="number" name="retail_price_renew" id="p-retail-ren" class="bp-input" step="0.01" required>
             </div>
           </div>
           <div class="col-md-4">
             <div class="bp-form-group">
               <label class="bp-label">Transfer Price</label>
-              <input type="number" name="retail_price_transfer" class="bp-input" step="0.01" value="0.00" placeholder="Auto-calculated">
+              <input type="number" name="retail_price_transfer" id="p-retail-tr" class="bp-input" step="0.01" required>
             </div>
           </div>
-        </div>
-
-        <div class="bp-form-group">
-          <label class="bp-label">TLD Availability Status</label>
-          <select name="status" class="bp-select">
-            <option value="active">Active (available for purchase)</option>
-            <option value="inactive">Inactive (hide from customer searches)</option>
-          </select>
         </div>
 
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:24px">
-          <button type="button" class="bp-btn bp-btn-outline" onclick="closeAddModal()">Cancel</button>
-          <button type="submit" class="bp-btn bp-btn-primary">Add Extension</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-<!-- Edit TLD Modal Dialog -->
-<div id="edit-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);z-index:999;align-items:center;justify-content:center">
-  <div class="bp-card" style="width:520px;max-width:95%">
-    <div class="bp-card-header">
-      <h3 class="bp-card-title">Modify TLD & Custom Pricing</h3>
-      <button class="bp-btn bp-btn-outline bp-btn-sm" onclick="closeModal()">✕</button>
-    </div>
-    <div class="bp-card-body" style="max-height:80vh;overflow-y:auto">
-      <form method="POST">
-        <?=csrf_input()?>
-        <input type="hidden" name="action" value="update_tld">
-        <input type="hidden" name="tld_id" id="m-tld-id">
-        
-        <div style="margin-bottom:16px;background:#f8fafc;padding:12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-size:11px;text-transform:uppercase;color:#64748b;font-weight:700">Selected Extension</div>
-            <div id="m-tld-name" style="font-size:22px;font-weight:800;font-family:monospace;color:#0f172a">.com</div>
-          </div>
-          <div style="text-align:right">
-            <label class="bp-label">Registrar API Routing</label>
-            <select name="registrar" id="m-registrar" class="bp-select">
-              <option value="none">Manual Processing (None)</option>
-              <option value="connectreseller">ConnectReseller Module</option>
-              <option value="resellerclub">ResellerClub Module</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="font-weight:700;font-size:12px;text-transform:uppercase;color:#64748b;margin-bottom:12px;border-bottom:1px solid #e2e8f0;padding-bottom:6px">💰 Wholesale Cost Prices (USD)</div>
-        <div class="row">
-          <div class="col-md-4">
-            <div class="bp-form-group">
-              <label class="bp-label">Register Cost ($)</label>
-              <input type="number" name="base_price_register" id="m-base-reg" class="bp-input" step="0.01" required>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="bp-form-group">
-              <label class="bp-label">Renew Cost ($)</label>
-              <input type="number" name="base_price_renew" id="m-base-ren" class="bp-input" step="0.01" required>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="bp-form-group">
-              <label class="bp-label">Transfer Cost ($)</label>
-              <input type="number" name="base_price_transfer" id="m-base-tr" class="bp-input" step="0.01" required>
-            </div>
-          </div>
-        </div>
-
-        <div style="font-weight:700;font-size:12px;text-transform:uppercase;color:#64748b;margin-bottom:12px;border-bottom:1px solid #e2e8f0;padding-bottom:6px">📈 Profit Rules & Markups</div>
-        <div class="row">
-          <div class="col-md-6">
-            <div class="bp-form-group">
-              <label class="bp-label">Markup Type</label>
-              <select name="markup_type" id="m-markup-type" class="bp-select">
-                <option value="percentage">Percentage (%)</option>
-                <option value="fixed">Fixed flat margin (<?=h($currency)?>)</option>
-              </select>
-            </div>
-          </div>
-          <div class="col-md-6">
-            <div class="bp-form-group">
-              <label class="bp-label">Profit Markup Value</label>
-              <input type="number" name="markup_value" id="m-markup-value" class="bp-input" step="0.01" required>
-            </div>
-          </div>
-        </div>
-
-        <div style="font-weight:700;font-size:12px;text-transform:uppercase;color:#64748b;margin-bottom:12px;border-bottom:1px solid #e2e8f0;padding-bottom:6px">🏷 Retail Selling Prices (<?=h($currency)?>)</div>
-        <div class="row">
-          <div class="col-md-4">
-            <div class="bp-form-group">
-              <label class="bp-label">Register Price</label>
-              <input type="number" name="retail_price_register" id="m-retail-reg" class="bp-input" step="0.01" required>
-              <div class="bp-input-hint">Enter custom price or set 0 to recalculate</div>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="bp-form-group">
-              <label class="bp-label">Renewal Price</label>
-              <input type="number" name="retail_price_renew" id="m-retail-ren" class="bp-input" step="0.01" required>
-            </div>
-          </div>
-          <div class="col-md-4">
-            <div class="bp-form-group">
-              <label class="bp-label">Transfer Price</label>
-              <input type="number" name="retail_price_transfer" id="m-retail-tr" class="bp-input" step="0.01" required>
-            </div>
-          </div>
-        </div>
-
-        <div class="bp-form-group">
-          <label class="bp-label">TLD Availability Status</label>
-          <select name="status" id="m-status" class="bp-select">
-            <option value="active">Active (available for purchase)</option>
-            <option value="inactive">Inactive (hide from customer searches)</option>
-          </select>
-        </div>
-
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:24px">
-          <button type="button" class="bp-btn bp-btn-outline" onclick="closeModal()">Cancel</button>
-          <button type="submit" class="bp-btn bp-btn-primary">Save Pricing Settings</button>
+          <button type="button" class="bp-btn bp-btn-outline" onclick="closePricingModal()">Cancel</button>
+          <button type="submit" class="bp-btn bp-btn-primary">Save Pricing</button>
         </div>
       </form>
     </div>
@@ -641,36 +609,50 @@ include 'partials/header.php';
 </div>
 
 <script>
-function openAddModal() {
-    document.getElementById('add-modal').style.display = 'flex';
-}
-function closeAddModal() {
-    document.getElementById('add-modal').style.display = 'none';
-}
-
-function editTld(tld) {
-    document.getElementById('m-tld-id').value = tld.id;
-    document.getElementById('m-tld-name').textContent = '.' + tld.tld;
-    document.getElementById('m-registrar').value = tld.registrar || 'none';
+function submitAddInline() {
+    var tld = document.getElementById('add-tld-name').value.trim();
+    if (!tld) {
+        alert('Please enter a TLD extension (e.g. com)');
+        return;
+    }
     
-    document.getElementById('m-base-reg').value = tld.base_price_register;
-    document.getElementById('m-base-ren').value = tld.base_price_renew;
-    document.getElementById('m-base-tr').value = tld.base_price_transfer;
+    document.getElementById('form-add-tld').value = tld;
+    document.getElementById('form-add-registrar').value = document.getElementById('add-registrar').value;
+    document.getElementById('form-add-dns').checked = document.getElementById('add-dns').checked;
+    document.getElementById('form-add-email').checked = document.getElementById('add-email').checked;
+    document.getElementById('form-add-id').checked = document.getElementById('add-id').checked;
+    document.getElementById('form-add-epp').checked = document.getElementById('add-epp').checked;
     
-    document.getElementById('m-markup-type').value = tld.markup_type;
-    document.getElementById('m-markup-value').value = tld.markup_value;
-    
-    document.getElementById('m-retail-reg').value = tld.retail_price_register;
-    document.getElementById('m-retail-ren').value = tld.retail_price_renew;
-    document.getElementById('m-retail-tr').value = tld.retail_price_transfer;
-    
-    document.getElementById('m-status').value = tld.status;
-    
-    document.getElementById('edit-modal').style.display = 'flex';
+    document.getElementById('inline-add-form').submit();
 }
 
-function closeModal() {
-    document.getElementById('edit-modal').style.display = 'none';
+function confirmDelete(id, name) {
+    if (confirm('Are you absolutely sure you want to delete ' + name + ' from your TLD list? This action is permanent.')) {
+        document.getElementById('delete-tld-id').value = id;
+        document.getElementById('delete-tld-form').submit();
+    }
+}
+
+function openPricingModal(t) {
+    document.getElementById('pricing-tld-id').value = t.id;
+    document.getElementById('pricing-tld-label').textContent = '.' + t.tld;
+    
+    document.getElementById('p-base-reg').value = t.base_price_register;
+    document.getElementById('p-base-ren').value = t.base_price_renew;
+    document.getElementById('p-base-tr').value = t.base_price_transfer;
+    
+    document.getElementById('p-markup-type').value = t.markup_type || 'percentage';
+    document.getElementById('p-markup-val').value = t.markup_value || '20.00';
+    
+    document.getElementById('p-retail-reg').value = t.retail_price_register;
+    document.getElementById('p-retail-ren').value = t.retail_price_renew;
+    document.getElementById('p-retail-tr').value = t.retail_price_transfer;
+    
+    document.getElementById('pricing-modal').style.display = 'flex';
+}
+
+function closePricingModal() {
+    document.getElementById('pricing-modal').style.display = 'none';
 }
 </script>
 <?php include 'partials/footer.php'; ?>

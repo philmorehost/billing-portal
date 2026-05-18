@@ -58,23 +58,48 @@ if (class_exists('DB') && file_exists($config_file)) {
           `id` INT AUTO_INCREMENT PRIMARY KEY,
           `tld` VARCHAR(50) NOT NULL UNIQUE,
           `registrar` VARCHAR(50) DEFAULT 'none',
-          `base_price_register` DECIMAL(15,2) NOT NULL,
-          `base_price_renew` DECIMAL(15,2) NOT NULL,
-          `base_price_transfer` DECIMAL(15,2) NOT NULL,
+          `base_price_register` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+          `base_price_renew` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+          `base_price_transfer` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
           `markup_type` ENUM('percentage', 'fixed') DEFAULT 'percentage',
           `markup_value` DECIMAL(15,2) DEFAULT 20.00,
-          `retail_price_register` DECIMAL(15,2) NOT NULL,
-          `retail_price_renew` DECIMAL(15,2) NOT NULL,
-          `retail_price_transfer` DECIMAL(15,2) NOT NULL,
+          `retail_price_register` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+          `retail_price_renew` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+          `retail_price_transfer` DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+          `dns_management` INT DEFAULT 0,
+          `email_forwarding` INT DEFAULT 0,
+          `id_protection` INT DEFAULT 0,
+          `epp_code` INT DEFAULT 1,
           `status` ENUM('active', 'inactive') DEFAULT 'active',
           `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
-        // Auto-migrate: check if domain_tlds has registrar column
-        $cols = DB::rows("SHOW COLUMNS FROM `domain_tlds` LIKE 'registrar'");
-        if (empty($cols)) {
+        // Auto-migrate: check and add missing columns if they don't exist
+        $existing_cols = [];
+        $cols = DB::rows("SHOW COLUMNS FROM `domain_tlds`");
+        if (is_array($cols)) {
+            foreach ($cols as $c) {
+                if (isset($c['Field'])) {
+                    $existing_cols[] = strtolower($c['Field']);
+                }
+            }
+        }
+        
+        if (!in_array('registrar', $existing_cols)) {
             DB::execute("ALTER TABLE `domain_tlds` ADD COLUMN `registrar` VARCHAR(50) DEFAULT 'none' AFTER `tld`");
+        }
+        if (!in_array('dns_management', $existing_cols)) {
+            DB::execute("ALTER TABLE `domain_tlds` ADD COLUMN `dns_management` INT DEFAULT 0 AFTER `retail_price_transfer`");
+        }
+        if (!in_array('email_forwarding', $existing_cols)) {
+            DB::execute("ALTER TABLE `domain_tlds` ADD COLUMN `email_forwarding` INT DEFAULT 0 AFTER `dns_management`");
+        }
+        if (!in_array('id_protection', $existing_cols)) {
+            DB::execute("ALTER TABLE `domain_tlds` ADD COLUMN `id_protection` INT DEFAULT 0 AFTER `email_forwarding`");
+        }
+        if (!in_array('epp_code', $existing_cols)) {
+            DB::execute("ALTER TABLE `domain_tlds` ADD COLUMN `epp_code` INT DEFAULT 1 AFTER `id_protection`");
         }
 
         // Auto-migrate: Create reseller_domain_prices table if not exists
