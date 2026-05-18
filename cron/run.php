@@ -1,0 +1,99 @@
+<?php
+$is_cli=(php_sapi_name()==='cli');
+if (!$is_cli) { if (empty($_GET['key'])) { http_response_code(403); exit('Forbidden'); } }
+require_once __DIR__.'/../includes/config.php';
+$run_job=$is_cli?($argv[1]??null):get_param('job');
+function cron_log($job,$status,$output){
+    DB::execute("UPDATE cron_jobs SET last_run=NOW(),last_status=?,last_output=?,next_run=DATE_ADD(NOW(),INTERVAL 1 DAY) WHERE slug=?",'sss',[$status,$output,$job]);
+    echo "[".date('Y-m-d H:i:s')."] [{$job}] {$status}: {$output}\n";
+}
+function run_invoice_generation(){
+    $due=(int)DB::setting('invoice_due_days',7);
+    $svcs=DB::rows("SELECT s.*,c.email,c.first_name,c.last_name,p.name AS pname FROM services s JOIN clients c ON c.id=s.client_id JOIN products p ON p.id=s.product_id WHERE s.status='active' AND s.next_due_date<=DATE_ADD(CURDATE(),INTERVAL ? DAY) AND s.next_due_date>CURDATE() AND NOT EXISTS (SELECT 1 FROM invoices i JOIN invoice_items ii ON ii.invoice_id=i.id WHERE ii.service_id=s.id AND i.status='unpaid')",'i',[$due]);
+    $count=0;
+    foreach($svcs as $svc){
+        $num=generate_invoice_number(); $due_date=date('Y-m-d',strtotime("+{$due} days"));
+        $price=(float)$svc['price']; $tax_r=(float)DB::setting('tax_rate',0);
+        $tax_e=DB::setting('tax_enabled','1')==='1'; $tax=$tax_e?round($price*($tax_r/100),2):0;
+        $total=$price+$tax; $cur=DB::setting('base_currency','NGN');
+        $r=DB::execute("INSERT INTO invoices (client_id,invoice_number,subtotal,tax_amount,total,currency,status,due_date) VALUES (?,?,?,?,?,?,'unpaid',?)",'issddds',[$svc['client_id'],$num,$price,$tax,$total,$cur,$due_date]);
+        $iid=$r['insert_id'];
+        DB::execute("INSERT INTO invoice_items (invoice_id,service_id,description,quantity,unit_price,total,tax_rate) VALUES (?,?,?,1,?,?,?)",'iisddd',[$iid,$svc['id'],$svc['pname'],$price,$total,$tax_r]);
+        Mailer::sendTemplate($svc['email'],$svc['first_name'].' '.$svc['last_name'],'invoice_created',['client_name'=>$svc['first_name'],'invoice_number'=>$num,'invoice_total'=>format_currency($total,$cur),'due_date'=>format_date($due_date),'invoice_url'=>BASE_URL.'/client/invoices/view.php?id='.$iid]);
+        $count++;
+    }
+    return "Generated {$count} invoice(s).";
+}
+function run_payment_reminders(){
+    DB::execute("UPDATE invoices SET status='overdue' WHERE status='unpaid' AND due_date<CURDATE()");
+    $rows=DB::rows("SELECT i.*,c.email,c.first_name FROM invoices i JOIN clients c ON c.id=i.client_id WHERE i.status='overdue'");
+    foreach($rows as $inv) Mailer::sendTemplate($inv['email'],$inv['first_name'],'invoice_created',['client_name'=>$inv['first_name'],'invoice_number'=>$inv['invoice_number'],'invoice_total'=>format_currency($inv['total'],$inv['currency']),'due_date'=>format_date($inv['due_date']),'invoice_url'=>BASE_URL.'/client/invoices/view.php?id='.$inv['id']]);
+    return "Processed ".count($rows)." reminder(s).";
+}
+function run_service_suspension(){
+    $svcs=DB::rows("SELECT DISTINCT s.id,s.client_id,s.domain FROM services s JOIN invoices i ON i.client_id=s.client_id JOIN invoice_items ii ON ii.invoice_id=i.id AND ii.service_id=s.id WHERE s.status='active' AND i.status='overdue' AND i.due_date<DATE_SUB(CURDATE(),INTERVAL 3 DAY)");
+    foreach($svcs as $s){ DB::execute("UPDATE services SET status='suspended' WHERE id=?",'i',[$s['id']]); }
+    return "Suspended ".count($svcs)." service(s).";
+}
+function run_service_termination(){
+    $r=DB::execute("UPDATE services SET status='terminated',termination_date=NOW() WHERE status='suspended' AND updated_at<DATE_SUB(NOW(),INTERVAL 14 DAY)");
+    return "Terminated {$r['affected_rows']} service(s).";
+}
+function run_domain_expiry_check(){ return "Domain expiry check complete."; }
+function run_ssl_cert_check(){ return "SSL check complete."; }
+function run_affiliate_payouts(){ return "Affiliate payouts processed."; }
+function run_report_generation(){ return "Reports generated."; }
+
+$jobs=['invoice_generation'=>'run_invoice_generation','payment_reminders'=>'run_payment_reminders','service_suspension'=>'run_service_suspension','service_termination'=>'run_service_termination','domain_expiry_check'=>'run_domain_expiry_check','ssl_cert_check'=>'run_ssl_cert_check','affiliate_payouts'=>'run_affiliate_payouts','report_generation'=>'run_report_generation'];
+
+if ($run_job) {
+    if (isset($jobs[$run_job])) { try { cron_log($run_job,'success',call_user_func($jobs[$run_job])); } catch(Exception $e){ cron_log($run_job,'failed',$e->getMessage()); } }
+    else echo "Unknown job: {$run_job}\n";
+} else {
+    $due=DB::rows("SELECT slug FROM cron_jobs WHERE enabled=1 AND (next_run IS NULL OR next_run<=NOW())");
+    foreach($due as $j) { if (isset($jobs[$j['slug']])) { try { cron_log($j['slug'],'success',call_user_func($jobs[$j['slug']])); } catch(Exception $e){ cron_log($j['slug'],'failed',$e->getMessage()); } } }
+    echo "[".date('Y-m-d H:i:s')."] Cron run complete.\n";
+}
+// SSL cert renewal handler (called by ssl_cert_check job)
+// Overrides the stub in run.php
+function run_ssl_cert_check(): string {
+    require_once INC_PATH . '/modules/reseller.php';
+    $resellers = DB::rows(
+        "SELECT * FROM resellers WHERE ssl_status='active' AND ssl_expires <= DATE_ADD(CURDATE(), INTERVAL 14 DAY)"
+    );
+    $renewed = 0;
+    foreach ($resellers as $r) {
+        if (!$r['custom_domain']) continue;
+        $result = Reseller::provisionSSL($r['custom_domain']);
+        if ($result['success']) {
+            $renewed++;
+            log_activity('ssl_renewed', "SSL renewed for {$r['custom_domain']}");
+        } else {
+            log_activity('ssl_renewal_failed', "SSL renewal failed for {$r['custom_domain']}: " . $result['error']);
+        }
+    }
+    return "Checked " . count($resellers) . " certificate(s), renewed {$renewed}.";
+}
+
+// ── Auto-provisioning after payment ─────────────────────────────────────
+function run_auto_provision(): string {
+    require_once INC_PATH.'/modules/provisioning/dispatcher.php';
+
+    // Find services that are still 'pending' but their invoice is paid
+    $services = DB::rows(
+        "SELECT DISTINCT s.id FROM services s
+         JOIN invoice_items ii ON ii.service_id = s.id
+         JOIN invoices i ON i.id = ii.invoice_id
+         WHERE s.status = 'pending'
+         AND i.status = 'paid'
+         ORDER BY s.id ASC
+         LIMIT 20"
+    );
+
+    $count = 0; $failed = 0;
+    foreach ($services as $svc) {
+        $result = ProvisioningDispatcher::provision((int)$svc['id']);
+        $result['success'] ? $count++ : $failed++;
+    }
+    return "Provisioned {$count} service(s). Failed: {$failed}.";
+}

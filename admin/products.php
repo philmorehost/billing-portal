@@ -1,0 +1,45 @@
+<?php
+require_once '../includes/config.php';
+$admin=Auth::requireAdmin(); $company=DB::setting('company_name','Billing Portal'); $page_title='Products';
+if(is_post()&&csrf_verify()&&post('action')==='delete'){
+    $pid=(int)post('product_id');
+    $in_use=DB::value("SELECT COUNT(*) FROM services WHERE product_id=?",'i',[$pid]);
+    if($in_use>0) redirect_with_flash('products.php','danger','Cannot delete: product has active services.');
+    DB::execute("DELETE FROM products WHERE id=?",'i',[$pid]);
+    redirect_with_flash('products.php','success','Product deleted.');
+}
+$groups=DB::rows("SELECT * FROM product_groups ORDER BY sort_order,name");
+$products=DB::rows("SELECT p.*,pg.name AS group_name,(SELECT COUNT(*) FROM services s WHERE s.product_id=p.id AND s.status='active') AS active_count FROM products p LEFT JOIN product_groups pg ON pg.id=p.group_id ORDER BY p.sort_order,p.name");
+include 'partials/header.php';
+?>
+<div class="bp-content">
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div><h1 class="bp-page-title" style="margin:0">Products & Services</h1><p class="bp-page-sub" style="margin:4px 0 0"><?=count($products)?> products</p></div>
+  <a href="products/add.php" class="bp-btn bp-btn-primary">➕ Add Product</a>
+</div>
+<?=flash_html()?>
+<div class="bp-card">
+<?php if($products):?>
+<table class="bp-table"><thead><tr><th>Product</th><th>Type</th><th>Group</th><th>Monthly Price</th><th>Active Services</th><th>Visible</th><th>Actions</th></tr></thead><tbody>
+<?php foreach($products as $p):?>
+<tr>
+  <td><div style="font-weight:600"><?=h($p['name'])?></div><div style="font-size:12px;color:#64748b"><?=h($p['slug'])?></div></td>
+  <td><span class="bp-badge bp-badge-info" style="text-transform:capitalize"><?=$p['type']?></span></td>
+  <td style="font-size:13px;color:#64748b"><?=h($p['group_name']??'—')?></td>
+  <td style="font-weight:600"><?=$p['price_monthly']?format_currency($p['price_monthly'],$p['currency']):'—'?></td>
+  <td style="font-weight:600"><?=$p['active_count']?></td>
+  <td><span class="bp-badge bp-badge-<?=$p['visible']?'success':'muted'?>"><?=$p['visible']?'Yes':'No'?></span></td>
+  <td><div class="d-flex gap-1">
+    <a href="products/edit.php?id=<?=$p['id']?>" class="bp-btn bp-btn-outline bp-btn-sm">Edit</a>
+    <form method="POST" style="display:inline" onsubmit="return confirm('Delete this product?')">
+      <?=csrf_input()?><input type="hidden" name="action" value="delete"><input type="hidden" name="product_id" value="<?=$p['id']?>">
+      <button type="submit" class="bp-btn bp-btn-outline bp-btn-sm" style="color:#ef4444;border-color:#fecdd3">Delete</button>
+    </form>
+  </div></td>
+</tr>
+<?php endforeach?>
+</tbody></table>
+<?php else:?><div class="bp-empty"><div class="bp-empty-icon">📦</div><div class="bp-empty-title">No products yet</div><a href="products/add.php" class="bp-btn bp-btn-primary bp-btn-sm" style="margin-top:12px">Add First Product</a></div><?php endif?>
+</div>
+</div>
+<?php include 'partials/footer.php';?>
