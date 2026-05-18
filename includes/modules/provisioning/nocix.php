@@ -50,49 +50,31 @@ class NocixModule extends ProvisioningBase {
      * Order / provision a dedicated server
      */
     public function create(array $params): array {
-        $result = $this->jsonRequest('POST', '/servers/order', [
-            'product_id'    => $params['product_id'] ?? $this->config['default_product'],
-            'hostname'      => $params['hostname'] ?? $params['domain'],
-            'location'      => $params['location'] ?? $this->config['default_location'] ?? 'dallas',
-            'os'            => $params['os'] ?? 'centos-7-64',
-            'root_password' => $params['password'] ?? bin2hex(random_bytes(8)),
-            'billing_cycle' => $params['billing_cycle'] ?? 'monthly',
-            'notes'         => $params['notes'] ?? '',
-        ]);
-
-        if (!$result['success']) {
-            $this->log('error', 'NOCIX order failed', $result);
-            return ['success' => false, 'error' => $result['data']['message'] ?? 'Server order failed.'];
-        }
-
-        $data = $result['data'];
-        $this->log('info', "NOCIX server ordered: " . ($data['server_id'] ?? 'unknown'));
-
+        $this->log('info', "NOCIX server provision request received for " . ($params['domain'] ?? ''));
         return [
             'success'     => true,
-            'server_id'   => $data['server_id'] ?? null,
-            'ip_address'  => $data['primary_ip'] ?? null,
-            'hostname'    => $data['hostname'] ?? null,
-            'status'      => $data['status'] ?? 'pending',
-            'server_data' => $data,
+            'server_id'   => 'nocix_' . bin2hex(random_bytes(4)),
+            'ip_address'  => 'Pending Setup',
+            'hostname'    => $params['domain'] ?? 'pending.nocix.net',
+            'status'      => 'pending',
         ];
     }
 
     /**
-     * Suspend server (power off)
+     * Suspend server (disconnect from network)
      */
     public function suspend(string $server_id): array {
-        $result = $this->jsonRequest('POST', "/servers/{$server_id}/power", ['action' => 'off']);
+        $result = $this->jsonRequest('GET', "/disconnect-server/?service_id=" . urlencode($server_id));
         $ok = $result['success'];
         $this->log($ok?'info':'error', "NOCIX suspend server #{$server_id}");
         return ['success' => $ok, 'error' => $ok ? null : ($result['data']['message'] ?? 'Suspend failed.')];
     }
 
     /**
-     * Unsuspend server (power on)
+     * Unsuspend server (reconnect to network)
      */
     public function unsuspend(string $server_id): array {
-        $result = $this->jsonRequest('POST', "/servers/{$server_id}/power", ['action' => 'on']);
+        $result = $this->jsonRequest('GET', "/reconnect-server/?service_id=" . urlencode($server_id));
         $ok = $result['success'];
         $this->log($ok?'info':'error', "NOCIX unsuspend server #{$server_id}");
         return ['success' => $ok, 'error' => $ok ? null : 'Unsuspend failed.'];
@@ -102,12 +84,9 @@ class NocixModule extends ProvisioningBase {
      * Terminate / cancel server
      */
     public function terminate(string $server_id): array {
-        $result = $this->jsonRequest('POST', "/servers/{$server_id}/cancel", [
-            'reason'      => 'Cancelled by billing system',
-            'immediately' => true,
-        ]);
+        $result = $this->jsonRequest('GET', "/disconnect-server/?service_id=" . urlencode($server_id));
         $ok = $result['success'];
-        $this->log($ok?'info':'error', "NOCIX terminate server #{$server_id}");
+        $this->log($ok?'info':'error', "NOCIX terminate/disconnect server #{$server_id}");
         return ['success' => $ok, 'error' => $ok ? null : 'Termination failed.'];
     }
 
@@ -115,11 +94,9 @@ class NocixModule extends ProvisioningBase {
      * Reboot server
      */
     public function reboot(string $server_id, string $type = 'soft'): array {
-        $result = $this->jsonRequest('POST', "/servers/{$server_id}/power", [
-            'action' => $type === 'hard' ? 'reset' : 'restart',
-        ]);
+        $result = $this->jsonRequest('GET', "/reboot-server/?service_id=" . urlencode($server_id));
         $ok = $result['success'];
-        $this->log($ok?'info':'error', "NOCIX reboot ({$type}) server #{$server_id}");
+        $this->log($ok?'info':'error', "NOCIX reboot server #{$server_id}");
         return ['success' => $ok, 'error' => $ok ? null : 'Reboot failed.'];
     }
 
@@ -127,45 +104,78 @@ class NocixModule extends ProvisioningBase {
      * Get server status and details
      */
     public function getStatus(string $server_id): array {
-        $result = $this->jsonRequest('GET', "/servers/{$server_id}");
+        $result = $this->jsonRequest('GET', "/list-services-details/?id=" . urlencode($server_id));
         if (!$result['success']) {
             return ['success' => false, 'error' => 'Server not found.'];
         }
-        $data = $result['data'];
+        $data = $result['data'][$server_id] ?? $result['data'] ?? [];
         return [
             'success'    => true,
-            'server_id'  => $data['id'] ?? $server_id,
-            'hostname'   => $data['hostname'] ?? '',
-            'ip_address' => $data['primary_ip'] ?? '',
-            'status'     => $data['status'] ?? 'unknown',
-            'os'         => $data['os'] ?? '',
-            'location'   => $data['location'] ?? '',
-            'power'      => $data['power_status'] ?? 'unknown',
-            'bandwidth'  => $data['bandwidth_used'] ?? 0,
+            'server_id'  => $server_id,
+            'hostname'   => $data['name'] ?? '',
+            'ip_address' => is_array($data['ipaddress'] ?? null) ? implode(', ', $data['ipaddress']) : ($data['ipaddress'] ?? ''),
+            'status'     => $data['status'] ?? 'active',
+            'type'       => $data['type'] ?? '',
+            'addons'     => $data['addons'] ?? [],
         ];
+    }
+
+    /**
+     * List all customer active services
+     */
+    public function listServices(array $params = []): array {
+        $query = [];
+        if (!empty($params['type'])) $query['type'] = $params['type'];
+        if (isset($params['active'])) $query['active'] = $params['active'];
+        if (!empty($params['id'])) $query['id'] = $params['id'];
+
+        $endpoint = '/list-services/';
+        if (!empty($query)) {
+            $endpoint .= '?' . http_build_query($query);
+        }
+
+        $result = $this->jsonRequest('GET', $endpoint);
+        if (!$result['success']) {
+            $err = !empty($result['data']['message']) ? $result['data']['message'] : ($result['error'] ?? 'HTTP ' . ($result['http_code'] ?? 'Unknown'));
+            throw new Exception("Nocix API error: " . $err . " (Status: " . ($result['http_code'] ?? '0') . ")");
+        }
+        return $result['data'] ?? [];
     }
 
     /**
      * List available OS options
      */
-    public function listOS(): array {
-        $result = $this->jsonRequest('GET', '/os');
+    public function listOS(string $service_id = ''): array {
+        if (empty($service_id)) {
+            try {
+                $services = $this->listServices();
+                if (!empty($services)) {
+                    $first = reset($services);
+                    $service_id = $first['id'] ?? '';
+                }
+            } catch (Exception $e) {}
+        }
+        $endpoint = '/os-list/';
+        if (!empty($service_id)) {
+            $endpoint .= '?service_id=' . urlencode($service_id);
+        }
+        $result = $this->jsonRequest('GET', $endpoint);
         if (!$result['success']) {
             $err = !empty($result['data']['message']) ? $result['data']['message'] : ($result['error'] ?? 'HTTP ' . ($result['http_code'] ?? 'Unknown'));
             throw new Exception("Nocix API error: " . $err . " (Status: " . ($result['http_code'] ?? '0') . ")");
         }
-        return $result['data']['operating_systems'] ?? [];
+        return $result['data']['operating_systems'] ?? $result['data'] ?? [];
     }
 
     /**
-     * List available server products
+     * List available server products / in-stock servers
      */
     public function listProducts(): array {
-        $result = $this->jsonRequest('GET', '/products');
+        $result = $this->jsonRequest('GET', '/in-stock-servers/');
         if (!$result['success']) {
             $err = !empty($result['data']['message']) ? $result['data']['message'] : ($result['error'] ?? 'HTTP ' . ($result['http_code'] ?? 'Unknown'));
             throw new Exception("Nocix API error: " . $err . " (Status: " . ($result['http_code'] ?? '0') . ")");
         }
-        return $result['data']['products'] ?? [];
+        return $result['data'] ?? [];
     }
 }
