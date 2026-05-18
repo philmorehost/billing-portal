@@ -47,6 +47,7 @@ include 'partials/header.php';
         'legal'    => '📄 Legal',
         'reseller' => '🏪 Reseller',
         'modules'  => '🔌 API Modules',
+        'landing'  => '🌐 Landing CMS',
       ];
       foreach ($tabs as $k => $label):
       ?>
@@ -241,6 +242,162 @@ include 'partials/header.php';
           <div class="bp-form-group"><label class="bp-label">API Password</label><input type="password" name="module_time4vps_password" class="bp-input" placeholder="Leave blank to keep existing"></div>
         </div>
         <div class="bp-form-group"><label class="bp-label">Default VPS Product ID</label><input type="text" name="module_time4vps_default_product_id" class="bp-input" value="<?=h($s('module_time4vps_default_product_id'))?>" placeholder="Product ID from Time4VPS panel"></div>
+
+        <?php endif ?>
+
+        <?php elseif ($tab === 'landing'):
+          $cms_products = [];
+          try {
+              $cms_products = DB::rows("SELECT id, name, slug FROM products ORDER BY name ASC") ?: [];
+          } catch (Exception $e) {}
+        ?>
+        <h5 style="font-weight:800;margin-bottom:16px;color:var(--primary)">🖼 Hero Section & Backdrop</h5>
+        <div class="bp-form-row bp-form-row-2">
+          <div class="bp-form-group"><label class="bp-label">Hero Badge</label><input type="text" name="landing_hero_badge" class="bp-input" value="<?= h($s('landing_hero_badge','⚡ Lightning Fast Hosting')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Hero Background Image Path / URL</label><input type="text" name="landing_hero_bg_image" class="bp-input" value="<?= h($s('landing_hero_bg_image','assets/images/hero-bg.png')) ?>"><div class="bp-input-hint">Default: assets/images/hero-bg.png (our generated premium high-tech banner)</div></div>
+        </div>
+        <div class="bp-form-group"><label class="bp-label">Hero Main Title</label><input type="text" name="landing_hero_title" class="bp-input" value="<?= h($s('landing_hero_title','Premium Web Hosting Built for Performance & Scale')) ?>"></div>
+        <div class="bp-form-group"><label class="bp-label">Hero Subtitle</label><textarea name="landing_hero_sub" class="bp-textarea" rows="3"><?= h($s('landing_hero_sub','Unmatched speed, reliable 99.9% uptime, and 24/7/365 customer support. Search your dream domain and launch your site in minutes.')) ?></textarea></div>
+
+        <hr style="margin:28px 0;border-color:#e2e8f0">
+        <h5 style="font-weight:800;margin-bottom:16px;color:var(--primary)">🔍 Interactive Domain Search Box</h5>
+        <div class="bp-form-row bp-form-row-2">
+          <div class="bp-form-group"><label class="bp-label">Input Placeholder Text</label><input type="text" name="landing_domain_placeholder" class="bp-input" value="<?= h($s('landing_domain_placeholder','Search your dream domain name... e.g. mybrand')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Search Button Text</label><input type="text" name="landing_domain_btn_text" class="bp-input" value="<?= h($s('landing_domain_btn_text','Search Domain')) ?>"></div>
+        </div>
+
+        <hr style="margin:28px 0;border-color:#e2e8f0">
+        <h5 style="font-weight:800;margin-bottom:16px;color:var(--primary)">📦 Package Promo Cards & Package Selector Links</h5>
+        <div class="bp-input-hint mb-3">Configure your three primary promotional cards below and bind their order buttons to any dynamic product package from your system!</div>
+        
+        <div class="row g-4">
+          <!-- Card 1 -->
+          <div class="col-md-4">
+            <div style="background:#f8fafc;padding:16px;border-radius:12px;border:1px solid #e2e8f0">
+              <h6 style="font-weight:700;margin-bottom:12px;color:var(--dark)">Promo Card 1 (Starter)</h6>
+              <div class="bp-form-group"><label class="bp-label">Plan Title</label><input type="text" name="landing_plan1_title" class="bp-input" value="<?= h($s('landing_plan1_title','Starter Cloud')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Price (Text)</label><input type="text" name="landing_plan1_price" class="bp-input" value="<?= h($s('landing_plan1_price','2500')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Billing Cycle (e.g. /mo)</label><input type="text" name="landing_plan1_cycle" class="bp-input" value="<?= h($s('landing_plan1_cycle','/mo')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Description</label><textarea name="landing_plan1_desc" class="bp-textarea" rows="2"><?= h($s('landing_plan1_desc','Perfect entry plan for new personal blogs, portfolios, and startup landing sites.')) ?></textarea></div>
+              <div class="bp-form-group"><label class="bp-label">Features (one per line)</label><textarea name="landing_plan1_features" class="bp-textarea" rows="3"><?= h($s('landing_plan1_features',"1 Website Allowed\n20 GB SSD Storage\nFree SSL & Domain\n24/7 Support Desk")) ?></textarea></div>
+              <div class="bp-form-group">
+                <label class="bp-label">Target Package Order Link</label>
+                <select name="landing_plan1_product_id" class="bp-select">
+                  <option value="">-- Let client choose / Static Register --</option>
+                  <?php foreach($cms_products as $cp): ?>
+                  <option value="<?= h($cp['slug']) ?>" <?= $s('landing_plan1_product_id')===$cp['slug']?'selected':'' ?>><?= h($cp['name']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Card 2 -->
+          <div class="col-md-4">
+            <div style="background:rgba(59,130,246,0.03);padding:16px;border-radius:12px;border:1.5px solid var(--primary)">
+              <h6 style="font-weight:700;margin-bottom:12px;color:var(--primary)">Promo Card 2 (Featured)</h6>
+              <div class="bp-form-group"><label class="bp-label">Plan Title</label><input type="text" name="landing_plan2_title" class="bp-input" value="<?= h($s('landing_plan2_title','Business Pro')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Price (Text)</label><input type="text" name="landing_plan2_price" class="bp-input" value="<?= h($s('landing_plan2_price','6000')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Billing Cycle (e.g. /mo)</label><input type="text" name="landing_plan2_cycle" class="bp-input" value="<?= h($s('landing_plan2_cycle','/mo')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Description</label><textarea name="landing_plan2_desc" class="bp-textarea" rows="2"><?= h($s('landing_plan2_desc','Optimized for growing online businesses, corporate hubs, and e-commerce setups.')) ?></textarea></div>
+              <div class="bp-form-group"><label class="bp-label">Features (one per line)</label><textarea name="landing_plan2_features" class="bp-textarea" rows="3"><?= h($s('landing_plan2_features',"Unlimited Websites\n100 GB NVMe Storage\nFree SSL & Backups\nPriority Tech Queue")) ?></textarea></div>
+              <div class="bp-form-group">
+                <label class="bp-label">Target Package Order Link</label>
+                <select name="landing_plan2_product_id" class="bp-select">
+                  <option value="">-- Let client choose / Static Register --</option>
+                  <?php foreach($cms_products as $cp): ?>
+                  <option value="<?= h($cp['slug']) ?>" <?= $s('landing_plan2_product_id')===$cp['slug']?'selected':'' ?>><?= h($cp['name']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="col-md-4">
+            <div style="background:#f8fafc;padding:16px;border-radius:12px;border:1px solid #e2e8f0">
+              <h6 style="font-weight:700;margin-bottom:12px;color:var(--dark)">Promo Card 3 (Enterprise)</h6>
+              <div class="bp-form-group"><label class="bp-label">Plan Title</label><input type="text" name="landing_plan3_title" class="bp-input" value="<?= h($s('landing_plan3_title','Enterprise Cloud')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Price (Text)</label><input type="text" name="landing_plan3_price" class="bp-input" value="<?= h($s('landing_plan3_price','12000')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Billing Cycle (e.g. /mo)</label><input type="text" name="landing_plan3_cycle" class="bp-input" value="<?= h($s('landing_plan3_cycle','/mo')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Description</label><textarea name="landing_plan3_desc" class="bp-textarea" rows="2"><?= h($s('landing_plan3_desc','Dedicated server parameters tailored for massive user loads and enterprise traffic.')) ?></textarea></div>
+              <div class="bp-form-group"><label class="bp-label">Features (one per line)</label><textarea name="landing_plan3_features" class="bp-textarea" rows="3"><?= h($s('landing_plan3_features',"Unlimited Websites\nUnlimited SSD Storage\nFree SSL & Backups\nDedicated Manager Support")) ?></textarea></div>
+              <div class="bp-form-group">
+                <label class="bp-label">Target Package Order Link</label>
+                <select name="landing_plan3_product_id" class="bp-select">
+                  <option value="">-- Let client choose / Static Register --</option>
+                  <?php foreach($cms_products as $cp): ?>
+                  <option value="<?= h($cp['slug']) ?>" <?= $s('landing_plan3_product_id')===$cp['slug']?'selected':'' ?>><?= h($cp['name']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr style="margin:28px 0;border-color:#e2e8f0">
+        <h5 style="font-weight:800;margin-bottom:16px;color:var(--primary)">🔌 Platform Benefits Grid (4 Cards)</h5>
+        <div class="row g-3">
+          <!-- Card 1 -->
+          <div class="col-md-6"><div style="background:#f8fafc;padding:12px;border-radius:8px">
+            <div class="bp-form-row bp-form-row-2">
+              <div class="bp-form-group"><label class="bp-label">Benefit 1 Icon / Emoji</label><input type="text" name="landing_feat1_icon" class="bp-input" value="<?= h($s('landing_feat1_icon','🚀')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Benefit 1 Title</label><input type="text" name="landing_feat1_title" class="bp-input" value="<?= h($s('landing_feat1_title','Super Fast SSDs')) ?>"></div>
+            </div>
+            <div class="bp-form-group"><label class="bp-label">Benefit 1 Description</label><input type="text" name="landing_feat1_desc" class="bp-input" value="<?= h($s('landing_feat1_desc','NVMe SSD storage arrays delivering 20x faster read-write operations for your applications.')) ?>"></div>
+          </div></div>
+          
+          <!-- Card 2 -->
+          <div class="col-md-6"><div style="background:#f8fafc;padding:12px;border-radius:8px">
+            <div class="bp-form-row bp-form-row-2">
+              <div class="bp-form-group"><label class="bp-label">Benefit 2 Icon / Emoji</label><input type="text" name="landing_feat2_icon" class="bp-input" value="<?= h($s('landing_feat2_icon','🔒')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Benefit 2 Title</label><input type="text" name="landing_feat2_title" class="bp-input" value="<?= h($s('landing_feat2_title','Ultimate Security')) ?>"></div>
+            </div>
+            <div class="bp-form-group"><label class="bp-label">Benefit 2 Description</label><input type="text" name="landing_feat2_desc" class="bp-input" value="<?= h($s('landing_feat2_desc','Granular network firewalls, real-time threat scanning, and free Automated SSL certificates.')) ?>"></div>
+          </div></div>
+
+          <!-- Card 3 -->
+          <div class="col-md-6"><div style="background:#f8fafc;padding:12px;border-radius:8px">
+            <div class="bp-form-row bp-form-row-2">
+              <div class="bp-form-group"><label class="bp-label">Benefit 3 Icon / Emoji</label><input type="text" name="landing_feat3_icon" class="bp-input" value="<?= h($s('landing_feat3_icon','📦')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Benefit 3 Title</label><input type="text" name="landing_feat3_title" class="bp-input" value="<?= h($s('landing_feat3_title','1-Click Installers')) ?>"></div>
+            </div>
+            <div class="bp-form-group"><label class="bp-label">Benefit 3 Description</label><input type="text" name="landing_feat3_desc" class="bp-input" value="<?= h($s('landing_feat3_desc','Deploy WordPress, Joomla, Drupal, and over 150 different scripts with a single mouse click.')) ?>"></div>
+          </div></div>
+
+          <!-- Card 4 -->
+          <div class="col-md-6"><div style="background:#f8fafc;padding:12px;border-radius:8px">
+            <div class="bp-form-row bp-form-row-2">
+              <div class="bp-form-group"><label class="bp-label">Benefit 4 Icon / Emoji</label><input type="text" name="landing_feat4_icon" class="bp-input" value="<?= h($s('landing_feat4_icon','🛡')) ?>"></div>
+              <div class="bp-form-group"><label class="bp-label">Benefit 4 Title</label><input type="text" name="landing_feat4_title" class="bp-input" value="<?= h($s('landing_feat4_title','DDoS Protection')) ?>"></div>
+            </div>
+            <div class="bp-form-group"><label class="bp-label">Benefit 4 Description</label><input type="text" name="landing_feat4_desc" class="bp-input" value="<?= h($s('landing_feat4_desc','Platform-wide traffic mitigation shields your servers and sites from sudden packet floods.')) ?>"></div>
+          </div></div>
+        </div>
+
+        <hr style="margin:28px 0;border-color:#e2e8f0">
+        <h5 style="font-weight:800;margin-bottom:16px;color:var(--primary)">📊 Datacenter Stats Banner</h5>
+        <div class="bp-form-row bp-form-row-2" style="grid-template-columns:repeat(4,1fr)">
+          <div class="bp-form-group"><label class="bp-label">Stat 1 Value</label><input type="text" name="landing_stat1_val" class="bp-input" value="<?= h($s('landing_stat1_val','99.9%')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Stat 1 Label</label><input type="text" name="landing_stat1_lbl" class="bp-input" value="<?= h($s('landing_stat1_lbl','Uptime Guarantee')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Stat 2 Value</label><input type="text" name="landing_stat2_val" class="bp-input" value="<?= h($s('landing_stat2_val','100ms')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Stat 2 Label</label><input type="text" name="landing_stat2_lbl" class="bp-input" value="<?= h($s('landing_stat2_lbl','Average Response Time')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Stat 3 Value</label><input type="text" name="landing_stat3_val" class="bp-input" value="<?= h($s('landing_stat3_val','15,000+')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Stat 3 Label</label><input type="text" name="landing_stat3_lbl" class="bp-input" value="<?= h($s('landing_stat3_lbl','Clients Worldwide')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Stat 4 Value</label><input type="text" name="landing_stat4_val" class="bp-input" value="<?= h($s('landing_stat4_val','24/7')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Stat 4 Label</label><input type="text" name="landing_stat4_lbl" class="bp-input" value="<?= h($s('landing_stat4_lbl','Expert Tech Support')) ?>"></div>
+        </div>
+
+        <hr style="margin:28px 0;border-color:#e2e8f0">
+        <h5 style="font-weight:800;margin-bottom:16px;color:var(--primary)">🎫 Support Banner (Call-to-Action)</h5>
+        <div class="bp-form-group"><label class="bp-label">Support Heading</label><input type="text" name="landing_support_title" class="bp-input" value="<?= h($s('landing_support_title','Need help choosing the right plan?')) ?>"></div>
+        <div class="bp-form-group"><label class="bp-label">Support Summary Text</label><input type="text" name="landing_support_desc" class="bp-input" value="<?= h($s('landing_support_desc','Our dedicated support technicians are available 24 hours a day, 7 days a week to guide your journey.')) ?>"></div>
+        <div class="bp-form-row bp-form-row-2">
+          <div class="bp-form-group"><label class="bp-label">Button 1 Label</label><input type="text" name="landing_support_btn1_text" class="bp-input" value="<?= h($s('landing_support_btn1_text','Open Support Ticket')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Button 1 Link (e.g. /client/tickets.php)</label><input type="text" name="landing_support_btn1_link" class="bp-input" value="<?= h($s('landing_support_btn1_link','/client/tickets.php')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Button 2 Label</label><input type="text" name="landing_support_btn2_text" class="bp-input" value="<?= h($s('landing_support_btn2_text','Browse Knowledgebase')) ?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Button 2 Link</label><input type="text" name="landing_support_btn2_link" class="bp-input" value="<?= h($s('landing_support_btn2_link','/client/login.php')) ?>"></div>
+        </div>
 
         <?php endif ?>
 

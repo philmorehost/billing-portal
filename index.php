@@ -54,7 +54,81 @@ $company_email = DB::setting('company_email', 'support@example.com');
 $company_phone = DB::setting('company_phone', '');
 $company_address = DB::setting('company_address', '');
 
-// Fetch dynamic products and groups from database
+// Load Landing Page CMS Content Settings
+$hero_badge = DB::setting('landing_hero_badge', '⚡ Lightning Fast Hosting');
+$hero_bg_image = DB::setting('landing_hero_bg_image', 'assets/images/hero-bg.png');
+$hero_title = DB::setting('landing_hero_title', 'Premium Web Hosting Built for Performance & Scale');
+$hero_sub = DB::setting('landing_hero_sub', 'Unmatched speed, reliable 99.9% uptime, and 24/7/365 customer support. Search your dream domain and launch your site in minutes.');
+
+$domain_placeholder = DB::setting('landing_domain_placeholder', 'Search your dream domain name... e.g. mybrand');
+$domain_btn_text = DB::setting('landing_domain_btn_text', 'Search Domain');
+
+// Plan 1 (Starter Promo Card)
+$plan1_title = DB::setting('landing_plan1_title', 'Starter Cloud');
+$plan1_price = DB::setting('landing_plan1_price', '2500');
+$plan1_cycle = DB::setting('landing_plan1_cycle', '/mo');
+$plan1_desc = DB::setting('landing_plan1_desc', 'Perfect entry plan for new personal blogs, portfolios, and startup landing sites.');
+$plan1_features = array_filter(array_map('trim', explode("\n", DB::setting('landing_plan1_features', "1 Website Allowed\n20 GB SSD Storage\nFree SSL & Domain\n24/7 Support Desk"))));
+$plan1_slug = DB::setting('landing_plan1_product_id', '');
+$plan1_link = $plan1_slug ? BASE_URL . "/client/order.php?product=" . urlencode($plan1_slug) : BASE_URL . "/client/register.php";
+
+// Plan 2 (Business Pro Promo Card)
+$plan2_title = DB::setting('landing_plan2_title', 'Business Pro');
+$plan2_price = DB::setting('landing_plan2_price', '6000');
+$plan2_cycle = DB::setting('landing_plan2_cycle', '/mo');
+$plan2_desc = DB::setting('landing_plan2_desc', 'Optimized for growing online businesses, corporate hubs, and e-commerce setups.');
+$plan2_features = array_filter(array_map('trim', explode("\n", DB::setting('landing_plan2_features', "Unlimited Websites\n100 GB NVMe Storage\nFree SSL & Backups\nPriority Tech Queue"))));
+$plan2_slug = DB::setting('landing_plan2_product_id', '');
+$plan2_link = $plan2_slug ? BASE_URL . "/client/order.php?product=" . urlencode($plan2_slug) : BASE_URL . "/client/register.php";
+
+// Plan 3 (Enterprise Cloud Promo Card)
+$plan3_title = DB::setting('landing_plan3_title', 'Enterprise Cloud');
+$plan3_price = DB::setting('landing_plan3_price', '12000');
+$plan3_cycle = DB::setting('landing_plan3_cycle', '/mo');
+$plan3_desc = DB::setting('landing_plan3_desc', 'Dedicated server parameters tailored for massive user loads and enterprise traffic.');
+$plan3_features = array_filter(array_map('trim', explode("\n", DB::setting('landing_plan3_features', "Unlimited Websites\nUnlimited SSD Storage\nFree SSL & Backups\nDedicated Manager Support"))));
+$plan3_slug = DB::setting('landing_plan3_product_id', '');
+$plan3_link = $plan3_slug ? BASE_URL . "/client/order.php?product=" . urlencode($plan3_slug) : BASE_URL . "/client/register.php";
+
+// Platform Benefits (4 Cards)
+$feat1_icon = DB::setting('landing_feat1_icon', '🚀');
+$feat1_title = DB::setting('landing_feat1_title', 'Super Fast SSDs');
+$feat1_desc = DB::setting('landing_feat1_desc', 'NVMe SSD storage arrays delivering 20x faster read-write operations for your applications.');
+
+$feat2_icon = DB::setting('landing_feat2_icon', '🔒');
+$feat2_title = DB::setting('landing_feat2_title', 'Ultimate Security');
+$feat2_desc = DB::setting('landing_feat2_desc', 'Granular network firewalls, real-time threat scanning, and free Automated SSL certificates.');
+
+$feat3_icon = DB::setting('landing_feat3_icon', '📦');
+$feat3_title = DB::setting('landing_feat3_title', '1-Click Installers');
+$feat3_desc = DB::setting('landing_feat3_desc', 'Deploy WordPress, Joomla, Drupal, and over 150 different scripts with a single mouse click.');
+
+$feat4_icon = DB::setting('landing_feat4_icon', '🛡');
+$feat4_title = DB::setting('landing_feat4_title', 'DDoS Protection');
+$feat4_desc = DB::setting('landing_feat4_desc', 'Platform-wide traffic mitigation shields your servers and sites from sudden packet floods.');
+
+// Datacenter Stats (4 counters)
+$stat1_val = DB::setting('landing_stat1_val', '99.9%');
+$stat1_lbl = DB::setting('landing_stat1_lbl', 'Uptime Guarantee');
+
+$stat2_val = DB::setting('landing_stat2_val', '100ms');
+$stat2_lbl = DB::setting('landing_stat2_lbl', 'Average Response Time');
+
+$stat3_val = DB::setting('landing_stat3_val', '15,000+');
+$stat3_lbl = DB::setting('landing_stat3_lbl', 'Clients Worldwide');
+
+$stat4_val = DB::setting('landing_stat4_val', '24/7');
+$stat4_lbl = DB::setting('landing_stat4_lbl', 'Expert Tech Support');
+
+// Support Callout Banner Settings
+$support_title = DB::setting('landing_support_title', 'Need help choosing the right plan?');
+$support_desc = DB::setting('landing_support_desc', 'Our dedicated support technicians are available 24 hours a day, 7 days a week to guide your journey.');
+$support_btn1_text = DB::setting('landing_support_btn1_text', 'Open Support Ticket');
+$support_btn1_link = DB::setting('landing_support_btn1_link', '/client/tickets.php');
+$support_btn2_text = DB::setting('landing_support_btn2_text', 'Browse Knowledgebase');
+$support_btn2_link = DB::setting('landing_support_btn2_link', '/client/login.php');
+
+// Fetch dynamic products and groups from database (tab layout below)
 $groups = [];
 $products = [];
 try {
@@ -238,21 +312,24 @@ foreach ($products as $p) {
       cursor: pointer;
     }
 
-    /* Hero Section */
+    /* Hero Section with Dark Replaceable Backdrop Image */
     .hp-hero {
       position: relative;
-      background: radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.08), transparent 45%),
-                  radial-gradient(circle at 10% 80%, rgba(16, 185, 129, 0.05), transparent 45%);
-      padding: 180px 24px 100px;
+      background-image: linear-gradient(rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.82)), url('<?= BASE_URL ?>/<?= h($hero_bg_image) ?>');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      padding: 210px 24px 140px;
       text-align: center;
+      color: #fff;
     }
 
     .hp-hero-badge {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(59, 130, 246, 0.08);
-      color: var(--primary);
+      background: rgba(255, 255, 255, 0.12);
+      color: #93c5fd;
       padding: 6px 14px;
       border-radius: 50px;
       font-size: 12px;
@@ -269,14 +346,14 @@ foreach ($products as $p) {
       line-height: 1.15;
       max-width: 880px;
       margin: 0 auto 20px;
-      background: linear-gradient(135deg, var(--dark) 60%, #1e40af);
+      background: linear-gradient(135deg, #ffffff 60%, #93c5fd);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
     .hp-hero-sub {
       font-size: 17px;
-      color: #64748b;
+      color: #cbd5e1;
       max-width: 650px;
       margin: 0 auto 36px;
       line-height: 1.7;
@@ -335,7 +412,7 @@ foreach ($products as $p) {
       gap: 16px;
       font-size: 13px;
       font-weight: 600;
-      color: #64748b;
+      color: #cbd5e1;
     }
 
     .hp-tld-badge {
@@ -345,7 +422,7 @@ foreach ($products as $p) {
     }
 
     .hp-tld-badge strong {
-      color: var(--dark);
+      color: #fff;
     }
 
     /* Products Section */
@@ -868,19 +945,19 @@ foreach ($products as $p) {
     </div>
   </div>
 
-  <!-- Hero Banner -->
+  <!-- Hero Banner (Replaceable Dynamic Settings Backdrop) -->
   <section class="hp-hero" id="hero">
     <div class="container">
-      <div class="hp-hero-badge">⚡ Lightning Fast Hosting</div>
-      <h1 class="hp-hero-title">Premium Web Hosting Built for Performance & Scale</h1>
-      <p class="hp-hero-sub">Unmatched speed, reliable 99.9% uptime, and 24/7/365 customer support. Search your dream domain and launch your site in minutes.</p>
+      <div class="hp-hero-badge"><?= h($hero_badge) ?></div>
+      <h1 class="hp-hero-title"><?= h($hero_title) ?></h1>
+      <p class="hp-hero-sub"><?= h($hero_sub) ?></p>
 
       <!-- Domain Search Form -->
       <div class="hp-domain-box">
         <form class="hp-domain-form" action="<?= BASE_URL ?>/client/order.php" method="GET">
           <input type="hidden" name="type" value="domain">
-          <input type="text" name="domain" class="hp-domain-input" placeholder="Search your dream domain name... e.g. mybrand" required>
-          <button type="submit" class="hp-domain-btn">Search Domain</button>
+          <input type="text" name="domain" class="hp-domain-input" placeholder="<?= h($domain_placeholder) ?>" required>
+          <button type="submit" class="hp-domain-btn"><?= h($domain_btn_text) ?></button>
         </form>
       </div>
 
@@ -898,10 +975,10 @@ foreach ($products as $p) {
   <section class="hp-stats">
     <div class="container">
       <div class="hp-stats-grid">
-        <div><div class="hp-stat-val">99.9%</div><div class="hp-stat-lbl">Uptime Guarantee</div></div>
-        <div><div class="hp-stat-val">100ms</div><div class="hp-stat-lbl">Average Response Time</div></div>
-        <div><div class="hp-stat-val">15,000+</div><div class="hp-stat-lbl">Clients Worldwide</div></div>
-        <div><div class="hp-stat-val">24/7</div><div class="hp-stat-lbl">Expert Tech Support</div></div>
+        <div><div class="hp-stat-val"><?= h($stat1_val) ?></div><div class="hp-stat-lbl"><?= h($stat1_lbl) ?></div></div>
+        <div><div class="hp-stat-val"><?= h($stat2_val) ?></div><div class="hp-stat-lbl"><?= h($stat2_lbl) ?></div></div>
+        <div><div class="hp-stat-val"><?= h($stat3_val) ?></div><div class="hp-stat-lbl"><?= h($stat3_lbl) ?></div></div>
+        <div><div class="hp-stat-val"><?= h($stat4_val) ?></div><div class="hp-stat-lbl"><?= h($stat4_lbl) ?></div></div>
       </div>
     </div>
   </section>
@@ -960,58 +1037,55 @@ foreach ($products as $p) {
       <?php endforeach; ?>
 
     <?php else: ?>
-      <!-- Fallback static hosting plans if DB has no visible product groups -->
+      <!-- Dynamic Promo cards matching CMS configurations & Dynamic Order Button Link packages -->
       <div class="hp-plans-grid">
-        <!-- Starter Plan -->
+        <!-- Promo Card 1 -->
         <div class="hp-plan-card">
-          <h3 class="hp-plan-name">Starter Cloud</h3>
-          <div class="hp-plan-desc">Perfect entry plan for new personal blogs, portfolios, and startup landing sites.</div>
+          <h3 class="hp-plan-name"><?= h($plan1_title) ?></h3>
+          <div class="hp-plan-desc"><?= h($plan1_desc) ?></div>
           <div class="hp-plan-pricing">
-            <span class="hp-plan-price"><?= format_currency(2500, $currency) ?></span>
-            <span class="hp-plan-currency">/mo</span>
+            <span class="hp-plan-price"><?= is_numeric($plan1_price) ? format_currency($plan1_price, $currency) : h($plan1_price) ?></span>
+            <span class="hp-plan-currency"><?= h($plan1_cycle) ?></span>
           </div>
           <ul class="hp-plan-features">
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> 1 Website Allowed</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> 20 GB SSD Storage</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> Free SSL & Domain</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> 24/7 Support Desk</li>
+            <?php foreach ($plan1_features as $feat): ?>
+            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> <?= h($feat) ?></li>
+            <?php endforeach; ?>
           </ul>
-          <a href="<?= BASE_URL ?>/client/register.php" class="hp-btn hp-btn-primary hp-plan-cta">Get Started &rarr;</a>
+          <a href="<?= $plan1_link ?>" class="hp-btn hp-btn-primary hp-plan-cta">Get Started &rarr;</a>
         </div>
 
-        <!-- Professional Plan -->
+        <!-- Promo Card 2 (Featured) -->
         <div class="hp-plan-card featured">
           <div class="hp-plan-badge">Popular</div>
-          <h3 class="hp-plan-name">Business Pro</h3>
-          <div class="hp-plan-desc">Optimized for growing online businesses, corporate hubs, and e-commerce setups.</div>
+          <h3 class="hp-plan-name"><?= h($plan2_title) ?></h3>
+          <div class="hp-plan-desc"><?= h($plan2_desc) ?></div>
           <div class="hp-plan-pricing">
-            <span class="hp-plan-price"><?= format_currency(6000, $currency) ?></span>
-            <span class="hp-plan-currency">/mo</span>
+            <span class="hp-plan-price"><?= is_numeric($plan2_price) ? format_currency($plan2_price, $currency) : h($plan2_price) ?></span>
+            <span class="hp-plan-currency"><?= h($plan2_cycle) ?></span>
           </div>
           <ul class="hp-plan-features">
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> Unlimited Websites</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> 100 GB NVMe Storage</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> Free SSL & Backups</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> Priority Tech Queue</li>
+            <?php foreach ($plan2_features as $feat): ?>
+            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> <?= h($feat) ?></li>
+            <?php endforeach; ?>
           </ul>
-          <a href="<?= BASE_URL ?>/client/register.php" class="hp-btn hp-btn-accent hp-plan-cta">Choose Pro &rarr;</a>
+          <a href="<?= $plan2_link ?>" class="hp-btn hp-btn-accent hp-plan-cta">Choose Pro &rarr;</a>
         </div>
 
-        <!-- Enterprise Plan -->
+        <!-- Promo Card 3 -->
         <div class="hp-plan-card">
-          <h3 class="hp-plan-name">Enterprise Cloud</h3>
-          <div class="hp-plan-desc">Dedicated server parameters tailored for massive user loads and enterprise traffic.</div>
+          <h3 class="hp-plan-name"><?= h($plan3_title) ?></h3>
+          <div class="hp-plan-desc"><?= h($plan3_desc) ?></div>
           <div class="hp-plan-pricing">
-            <span class="hp-plan-price"><?= format_currency(12000, $currency) ?></span>
-            <span class="hp-plan-currency">/mo</span>
+            <span class="hp-plan-price"><?= is_numeric($plan3_price) ? format_currency($plan3_price, $currency) : h($plan3_price) ?></span>
+            <span class="hp-plan-currency"><?= h($plan3_cycle) ?></span>
           </div>
           <ul class="hp-plan-features">
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> Unlimited Websites</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> Unlimited SSD Storage</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> Free SSL & Backups</li>
-            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> Dedicated Manager Support</li>
+            <?php foreach ($plan3_features as $feat): ?>
+            <li class="hp-plan-feature-item"><span class="hp-plan-feature-check">✓</span> <?= h($feat) ?></li>
+            <?php endforeach; ?>
           </ul>
-          <a href="<?= BASE_URL ?>/client/register.php" class="hp-btn hp-btn-primary hp-plan-cta">Get Enterprise &rarr;</a>
+          <a href="<?= $plan3_link ?>" class="hp-btn hp-btn-primary hp-plan-cta">Get Enterprise &rarr;</a>
         </div>
       </div>
     <?php endif; ?>
@@ -1024,25 +1098,29 @@ foreach ($products as $p) {
       <p class="hp-section-sub">We offer everything you need to run, configure, and secure your online projects.</p>
     </div>
     <div class="hp-benefits-grid">
+      <!-- Benefit 1 -->
       <div class="hp-benefit-card">
-        <div class="hp-benefit-icon">🚀</div>
-        <h3 class="hp-benefit-title">Super Fast SSDs</h3>
-        <p class="hp-benefit-desc">NVMe SSD storage arrays delivering 20x faster read-write operations for your applications.</p>
+        <div class="hp-benefit-icon"><?= h($feat1_icon) ?></div>
+        <h3 class="hp-benefit-title"><?= h($feat1_title) ?></h3>
+        <p class="hp-benefit-desc"><?= h($feat1_desc) ?></p>
       </div>
+      <!-- Benefit 2 -->
       <div class="hp-benefit-card">
-        <div class="hp-benefit-icon">🔒</div>
-        <h3 class="hp-benefit-title">Ultimate Security</h3>
-        <p class="hp-benefit-desc">Granular network firewalls, real-time threat scanning, and free Automated SSL certificates.</p>
+        <div class="hp-benefit-icon"><?= h($feat2_icon) ?></div>
+        <h3 class="hp-benefit-title"><?= h($feat2_title) ?></h3>
+        <p class="hp-benefit-desc"><?= h($feat2_desc) ?></p>
       </div>
+      <!-- Benefit 3 -->
       <div class="hp-benefit-card">
-        <div class="hp-benefit-icon">📦</div>
-        <h3 class="hp-benefit-title">1-Click Installers</h3>
-        <p class="hp-benefit-desc">Deploy WordPress, Joomla, Drupal, and over 150 different scripts with a single mouse click.</p>
+        <div class="hp-benefit-icon"><?= h($feat3_icon) ?></div>
+        <h3 class="hp-benefit-title"><?= h($feat3_title) ?></h3>
+        <p class="hp-benefit-desc"><?= h($feat3_desc) ?></p>
       </div>
+      <!-- Benefit 4 -->
       <div class="hp-benefit-card">
-        <div class="hp-benefit-icon">🛡</div>
-        <h3 class="hp-benefit-title">DDoS Protection</h3>
-        <p class="hp-benefit-desc">Platform-wide traffic mitigation shields your servers and sites from sudden packet floods.</p>
+        <div class="hp-benefit-icon"><?= h($feat4_icon) ?></div>
+        <h3 class="hp-benefit-title"><?= h($feat4_title) ?></h3>
+        <p class="hp-benefit-desc"><?= h($feat4_desc) ?></p>
       </div>
     </div>
   </section>
@@ -1051,12 +1129,12 @@ foreach ($products as $p) {
   <section class="hp-section" id="support">
     <div class="hp-support-box">
       <div class="hp-support-txt">
-        <h2>Need help choosing the right plan?</h2>
-        <p>Our dedicated support technicians are available 24 hours a day, 7 days a week to guide your journey.</p>
+        <h2><?= h($support_title) ?></h2>
+        <p><= h($support_desc) ?></p>
       </div>
       <div class="hp-support-btns">
-        <a href="<?= BASE_URL ?>/client/tickets.php" class="hp-btn hp-btn-outline">Open Support Ticket</a>
-        <a href="<?= BASE_URL ?>/client/login.php" class="hp-btn hp-btn-primary">Browse Knowledgebase</a>
+        <a href="<?= BASE_URL ?><?= h($support_btn1_link) ?>" class="hp-btn hp-btn-outline"><?= h($support_btn1_text) ?></a>
+        <a href="<?= BASE_URL ?><?= h($support_btn2_link) ?>" class="hp-btn hp-btn-primary"><?= h($support_btn2_text) ?></a>
       </div>
     </div>
   </section>
