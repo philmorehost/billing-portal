@@ -22,6 +22,7 @@ class NocixModule extends ProvisioningBase {
 
     private function jsonRequest(string $method, string $endpoint, array $data = []): array {
         $base = !empty($this->config['hostname']) ? rtrim($this->config['hostname'], '/') : 'https://my.nocix.net/api';
+        $base = str_replace('/apidoc', '/api', $base);
         $url  = $base . $endpoint;
         $hdrs = array_map(fn($k,$v)=>"{$k}: {$v}", array_keys($this->headers()), $this->headers());
         $ch   = curl_init($url);
@@ -149,7 +150,11 @@ class NocixModule extends ProvisioningBase {
      */
     public function listOS(): array {
         $result = $this->jsonRequest('GET', '/os');
-        return $result['success'] ? ($result['data']['operating_systems'] ?? []) : [];
+        if (!$result['success']) {
+            $err = !empty($result['data']['message']) ? $result['data']['message'] : ($result['error'] ?? 'HTTP ' . ($result['http_code'] ?? 'Unknown'));
+            throw new Exception("Nocix API error: " . $err . " (Status: " . ($result['http_code'] ?? '0') . ")");
+        }
+        return $result['data']['operating_systems'] ?? [];
     }
 
     /**
@@ -157,6 +162,10 @@ class NocixModule extends ProvisioningBase {
      */
     public function listProducts(): array {
         $result = $this->jsonRequest('GET', '/products');
-        return $result['success'] ? ($result['data']['products'] ?? []) : [];
+        if (!$result['success']) {
+            $err = !empty($result['data']['message']) ? $result['data']['message'] : ($result['error'] ?? 'HTTP ' . ($result['http_code'] ?? 'Unknown'));
+            throw new Exception("Nocix API error: " . $err . " (Status: " . ($result['http_code'] ?? '0') . ")");
+        }
+        return $result['data']['products'] ?? [];
     }
 }

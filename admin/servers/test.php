@@ -51,7 +51,7 @@ include '../partials/header.php';
       </div>
       <div>
         <div style="font-weight:700;font-size:16px"><?=h($server['name'])?></div>
-        <div style="font-size:13px;color:#64748b"><?=h($server['hostname'])?> : <?=$server['port']?></div>
+        <div style="font-size:13px;color:#64748b"><?=h($server['hostname'])?><?php if(!in_array($server['type'],['nocix','time4vps'])):?> : <?=$server['port']?><?php endif?></div>
       </div>
     </div>
     <div style="background:<?=isset($result['success'])&&$result['success']?'#f0fdf4':'#fff1f2'?>;border-radius:10px;padding:16px;font-size:14px">

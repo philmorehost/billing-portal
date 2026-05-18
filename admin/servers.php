@@ -6,7 +6,9 @@ if(is_post()&&csrf_verify()){
     $action=post('action');
     if($action==='create'){
         $name=trim(post('name')); $type=post('type'); $host=trim(post('hostname'));
-        $port=(int)post('port',2087); $user=trim(post('username')); $api=trim(post('api_key'));
+        $port=(int)post('port',2087);
+        if($type==='nocix'||$type==='time4vps') $port=443;
+        $user=trim(post('username')); $api=trim(post('api_key'));
         $pw=post('password');
         if(!$name||!$host){redirect_with_flash('servers.php','danger','Name and hostname required.');}
         DB::execute("INSERT INTO servers (name,type,hostname,port,username,password,api_key,status) VALUES (?,?,?,?,?,?,?,'active')",'sssisss',[$name,$type,$host,$port,$user,$pw,$api]);
@@ -43,7 +45,7 @@ include 'partials/header.php';
           <td style="font-weight:600"><?=h($s['name'])?></td>
           <td><span class="bp-badge bp-badge-info" style="text-transform:capitalize"><?=h($s['type'])?></span></td>
           <td style="font-family:monospace;font-size:13px"><?=h($s['hostname'])?></td>
-          <td style="font-size:13px;color:#64748b"><?=$s['port']?></td>
+          <td style="font-size:13px;color:#64748b"><?=in_array($s['type'],['nocix','time4vps'])?'N/A':$s['port']?></td>
           <td><span class="bp-badge bp-badge-<?=$sb[$s['status']]??'muted'?>"><?=$s['status']?></span></td>
           <td>
             <div class="d-flex gap-1">
