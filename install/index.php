@@ -28,9 +28,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         $conn->query("CREATE DATABASE IF NOT EXISTS `".str_replace('`','``',$dn)."` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
         $conn->select_db($dn);
         $schema = file_get_contents(__DIR__.'/schema.sql');
-        foreach (array_filter(array_map('trim',explode(';',$schema))) as $sql) {
-            if (empty($sql)||strpos(ltrim($sql),'--')===0) continue;
-            if (!$conn->query($sql) && $conn->errno!==1050) {} // ignore table exists
+        $queries = preg_split('/;[\r\n]+/', $schema);
+        foreach ($queries as $sql) {
+            $sql = trim($sql);
+            if (empty($sql) || strpos($sql, '--') === 0) continue;
+            if (!$conn->query($sql) && $conn->errno !== 1050) {
+                $_SESSION['install_error'] = 'Database Error: ' . $conn->error;
+                header('Location: index.php?step=2');
+                exit;
+            }
         }
         file_put_contents($root.'/includes/db.config.php',"<?php\ndefine('DB_HOST',".var_export($dh,true).");\ndefine('DB_PORT',".var_export($dp,true).");\ndefine('DB_NAME',".var_export($dn,true).");\ndefine('DB_USER',".var_export($du,true).");\ndefine('DB_PASS',".var_export($dw,true).");\n");
         $_SESSION['install_step']=3; unset($_SESSION['install_error']); header('Location: index.php?step=3'); exit;
