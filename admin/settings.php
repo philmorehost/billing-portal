@@ -243,8 +243,6 @@ include 'partials/header.php';
         </div>
         <div class="bp-form-group"><label class="bp-label">Default VPS Product ID</label><input type="text" name="module_time4vps_default_product_id" class="bp-input" value="<?=h($s('module_time4vps_default_product_id'))?>" placeholder="Product ID from Time4VPS panel"></div>
 
-        <?php endif ?>
-
         <?php elseif ($tab === 'landing'):
           $cms_products = [];
           try {
