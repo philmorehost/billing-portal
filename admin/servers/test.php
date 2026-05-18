@@ -12,7 +12,7 @@ if($server['type']==='cpanel'){
     $module=ProvisioningDispatcher::buildModule('cpanel',$sid);
     if($module){
         try{
-            $pkgs=((CpanelModule)$module)->listPackages();
+            $pkgs=$module->listPackages();
             $result=['tested'=>true,'success'=>true,'message'=>'WHM connection successful.','details'=>'Packages found: '.count($pkgs)];
         }catch(Exception $e){
             $result=['tested'=>true,'success'=>false,'message'=>'Connection failed: '.$e->getMessage()];
