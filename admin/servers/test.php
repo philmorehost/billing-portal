@@ -18,6 +18,20 @@ if($server['type']==='cpanel'){
             $result=['tested'=>true,'success'=>false,'message'=>'Connection failed: '.$e->getMessage()];
         }
     }
+} elseif($server['type']==='nocix'){
+    $module=ProvisioningDispatcher::buildModule('nocix',$sid);
+    if($module){
+        try{
+            $prods=$module->listProducts();
+            if(!empty($prods)){
+                $result=['tested'=>true,'success'=>true,'message'=>'Nocix connection successful.','details'=>'Products found: '.count($prods)];
+            } else {
+                $result=['tested'=>true,'success'=>false,'message'=>'Nocix connection failed. Check User ID, API Key, and API Base URL.'];
+            }
+        }catch(Exception $e){
+            $result=['tested'=>true,'success'=>false,'message'=>'Connection failed: '.$e->getMessage()];
+        }
+    }
 }
 
 $company=DB::setting('company_name','Billing Portal');

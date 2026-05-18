@@ -9,18 +9,20 @@ require_once __DIR__ . '/base.php';
 
 class NocixModule extends ProvisioningBase {
 
-    private string $api_base = 'https://portal.nocix.net/api/v1';
-
     private function headers(): array {
+        $userId = $this->config['username'] ?? '';
+        $apiKey = $this->config['api_key'] ?? '';
+        $credentials = base64_encode($userId . ':' . $apiKey);
         return [
-            'Authorization' => 'Bearer ' . $this->config['api_key'],
+            'Authorization' => 'Basic ' . $credentials,
             'Content-Type'  => 'application/json',
             'Accept'        => 'application/json',
         ];
     }
 
     private function jsonRequest(string $method, string $endpoint, array $data = []): array {
-        $url  = $this->api_base . $endpoint;
+        $base = !empty($this->config['hostname']) ? rtrim($this->config['hostname'], '/') : 'https://my.nocix.net/api';
+        $url  = $base . $endpoint;
         $hdrs = array_map(fn($k,$v)=>"{$k}: {$v}", array_keys($this->headers()), $this->headers());
         $ch   = curl_init($url);
         curl_setopt_array($ch, [
