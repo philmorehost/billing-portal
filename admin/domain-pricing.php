@@ -185,6 +185,131 @@ if(is_post() && post('action') === 'sync_resellerclub' && csrf_verify()) {
     }
 }
 
+// 2b. Sync from Upperlink
+if(is_post() && post('action') === 'sync_upperlink' && csrf_verify()) {
+    $apiKey = DB::setting('module_upperlink_api_key');
+    if (empty($apiKey)) {
+        $error = "Please configure your Upperlink API Key in Settings first.";
+    } else {
+        $username = DB::setting('module_upperlink_username');
+        if (empty($username)) {
+            $username = DB::setting('company_email', '');
+        }
+        
+        $timeStr = gmdate("y-m-d H");
+        $hash = hash_hmac("sha256", $apiKey, "{$username}:{$timeStr}");
+        $token = base64_encode($hash);
+        
+        $url = 'https://client.upperlink.ng/clients/modules/addons/DomainsReseller/api/index.php/tlds/pricing';
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "username: {$username}",
+            "token: {$token}"
+        ]);
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($http_code !== 200 || !$response) {
+            $error = "Upperlink TLD sync failed: HTTP code {$http_code} or no response.";
+        } else {
+            $data = json_decode($response, true);
+            $tldList = [];
+            
+            if (is_array($data)) {
+                if (isset($data['tlds']) && is_array($data['tlds'])) {
+                    foreach ($data['tlds'] as $tldName => $prices) {
+                        $tldList[] = [
+                            'tld' => $tldName,
+                            'register' => $prices['register'] ?? ($prices['registration'] ?? 0),
+                            'renew' => $prices['renew'] ?? ($prices['renewal'] ?? 0),
+                            'transfer' => $prices['transfer'] ?? 0
+                        ];
+                    }
+                } elseif (isset($data['success']) && isset($data['data']) && is_array($data['data'])) {
+                    foreach ($data['data'] as $row) {
+                        if (isset($row['tld'])) {
+                            $tldList[] = [
+                                'tld' => $row['tld'],
+                                'register' => $row['register'] ?? ($row['registrationPrice'] ?? 0),
+                                'renew' => $row['renew'] ?? ($row['renewalPrice'] ?? 0),
+                                'transfer' => $row['transfer'] ?? ($row['transferPrice'] ?? 0)
+                            ];
+                        }
+                    }
+                } else {
+                    $first = reset($data);
+                    if (is_array($first) && (isset($first['tld']) || isset($first['register']))) {
+                        foreach ($data as $row) {
+                            $tldList[] = [
+                                'tld' => $row['tld'] ?? '',
+                                'register' => $row['register'] ?? ($row['registration'] ?? 0),
+                                'renew' => $row['renew'] ?? ($row['renewal'] ?? 0),
+                                'transfer' => $row['transfer'] ?? 0
+                            ];
+                        }
+                    }
+                }
+            }
+            
+            if (empty($tldList)) {
+                $error = "Could not parse TLD list from Upperlink response.";
+            } else {
+                $synced = 0;
+                foreach ($tldList as $item) {
+                    $tld = strtolower(trim($item['tld'] ?? ''));
+                    if (empty($tld)) continue;
+                    $tld = ltrim($tld, '.');
+                    
+                    $base_reg = (float)($item['register'] ?? 0);
+                    $base_ren = (float)($item['renew'] ?? 0);
+                    $base_tr  = (float)($item['transfer'] ?? 0);
+                    
+                    if ($base_reg <= 0) continue;
+                    
+                    $existing = DB::row("SELECT * FROM domain_tlds WHERE tld=?", 's', [$tld]);
+                    if ($existing) {
+                        $val = (float)$existing['markup_value'];
+                        $type = $existing['markup_type'];
+                        
+                        if ($type === 'percentage') {
+                            $retail_reg = round($base_reg * (1 + $val / 100), 2);
+                            $retail_ren = round($base_ren * (1 + $val / 100), 2);
+                            $retail_tr  = round($base_tr * (1 + $val / 100), 2);
+                        } else {
+                            $retail_reg = round($base_reg + $val, 2);
+                            $retail_ren = round($base_ren + $val, 2);
+                            $retail_tr  = round($base_tr + $val, 2);
+                        }
+                        
+                        DB::execute(
+                            "UPDATE domain_tlds SET registrar='upperlink', base_price_register=?, base_price_renew=?, base_price_transfer=?, retail_price_register=?, retail_price_renew=?, retail_price_transfer=? WHERE tld=?",
+                            'dddddds', [$base_reg, $base_ren, $base_tr, $retail_reg, $retail_ren, $retail_tr, $tld]
+                        );
+                    } else {
+                        $val = 20.00;
+                        $retail_reg = round($base_reg * 1.20, 2);
+                        $retail_ren = round($base_ren * 1.20, 2);
+                        $retail_tr  = round($base_tr * 1.20, 2);
+                        
+                        DB::execute(
+                            "INSERT INTO domain_tlds (tld, registrar, base_price_register, base_price_renew, base_price_transfer, markup_type, markup_value, retail_price_register, retail_price_renew, retail_price_transfer, status) VALUES (?, 'upperlink', ?,?,?, 'percentage', ?,?,?,?, 'active')",
+                            'sdddddddd', [$tld, $base_reg, $base_ren, $base_tr, $val, $retail_reg, $retail_ren, $retail_tr]
+                        );
+                    }
+                    $synced++;
+                }
+                $success = "Successfully synchronized {$synced} domain extension(s) from Upperlink!";
+            }
+        }
+    }
+}
+
 // 3. Save All Inline Features & Registrars (WHMCS Style bulk update)
 if(is_post() && post('action') === 'save_all_tlds' && csrf_verify()) {
     $tld_data = $_POST['tlds'] ?? [];
@@ -325,6 +450,13 @@ include 'partials/header.php';
         <input type="hidden" name="action" value="sync_resellerclub">
         <button type="submit" class="bp-btn bp-btn-accent">
           🔄 Sync ResellerClub TLDs
+        </button>
+      </form>
+      <form method="POST" style="display:inline-block">
+        <?=csrf_input()?>
+        <input type="hidden" name="action" value="sync_upperlink">
+        <button type="submit" class="bp-btn bp-btn-success" style="background-color:#10b981;border-color:#10b981">
+          🔄 Sync Upperlink TLDs
         </button>
       </form>
     </div>
