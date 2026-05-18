@@ -52,12 +52,21 @@ $page_title=$page_title??'Client Area';
   </div>
 </nav>
 <div class="sidebar-footer">
+  <?php if (!empty($client)): ?>
   <div class="sidebar-user">
     <div class="sidebar-avatar"><?=strtoupper(substr($client['first_name']??'U',0,1))?></div>
     <div><div class="sidebar-uname"><?=h(($client['first_name']??'').' '.($client['last_name']??''))?></div>
     <div class="sidebar-urole"><?=format_currency($client['credit_balance']??0,$currency)?> credit</div></div>
   </div>
   <a href="<?=BASE_URL?>/client/logout.php" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;color:rgba(255,255,255,.5);font-size:12px;text-decoration:none;margin-top:4px"><span>⏏</span> Logout</a>
+  <?php else: ?>
+  <div class="sidebar-user">
+    <div class="sidebar-avatar">G</div>
+    <div><div class="sidebar-uname">Guest Customer</div>
+    <div class="sidebar-urole">Welcome to our portal</div></div>
+  </div>
+  <a href="<?=BASE_URL?>/client/login.php" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;color:rgba(255,255,255,.8);font-size:12px;text-decoration:none;margin-top:4px;background:rgba(255,255,255,0.06);font-weight:600"><span>🔑</span> Log In / Register</a>
+  <?php endif; ?>
 </div>
 </div></aside>
 <main class="bp-main">

@@ -1,20 +1,24 @@
 <?php
 require_once '../includes/config.php';
 require_once INC_PATH.'/modules/billing.php';
-$client=Auth::requireClient();
+$client=Auth::client();
 $company=DB::setting('company_name','Billing Portal');
 $currency=DB::setting('base_currency','NGN');
 $page_title='Order';
 $error='';
 
 $pid=(int)get_param('product_id');
+if(!$pid && get_param('type')==='domain'){
+    $domain_prod=DB::row("SELECT id FROM products WHERE type='domain' AND visible=1 LIMIT 1");
+    if($domain_prod) $pid=(int)$domain_prod['id'];
+}
 $product=$pid?DB::row("SELECT p.*,pg.name AS group_name FROM products p LEFT JOIN product_groups pg ON pg.id=p.group_id WHERE p.id=? AND p.visible=1",'i',[$pid]):null;
 
 // AJAX coupon check
 if(is_post()&&csrf_verify()&&post('action')==='apply_coupon'){
     $code=strtoupper(trim(post('coupon_code')));
     $price=(float)post('price');
-    json_response(Billing::validateCoupon($code,$client['id'],$price));
+    json_response(Billing::validateCoupon($code,$client ? $client['id'] : 0,$price));
 }
 
 // Place order
@@ -28,68 +32,117 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
     $prod=DB::row("SELECT * FROM products WHERE id=? AND visible=1",'i',[$pid2]);
     if(!$prod) { $error='Product not found.'; }
     else {
-        $price_col='price_'.$cyc;
-        if (!empty($_SESSION['reseller_domain_id'])) {
-            require_once INC_PATH . '/modules/reseller.php';
-            $price = Reseller::getRetailPrice((int)$prod['id'], $cyc, (int)$_SESSION['reseller_domain_id']);
-        } else {
-            $price=(float)($prod[$price_col]??0);
-        }
-        if(!$price) { $error='Selected billing cycle not available.'; }
-        else {
-            $tax_enabled=DB::setting('tax_enabled','1')==='1';
-            $tax_rate=$tax_enabled?(float)DB::setting('tax_rate',0):0;
-            $tax_amt=round($price*($tax_rate/100),2);
-            $discount=0; $coupon_id=null;
+        // Handle inline guest registration or login if client not logged in
+        if (!$client) {
+            $auth_type = post('checkout_auth_type', 'register');
+            if ($auth_type === 'register') {
+                $fname = trim(post('first_name',''));
+                $lname = trim(post('last_name',''));
+                $email = trim(post('email',''));
+                $phone = trim(post('phone',''));
+                $pass = post('password','');
 
-            if($coupon_code){
-                $cv=Billing::validateCoupon($coupon_code,$client['id'],$price);
-                if($cv['valid']){$discount=$cv['discount'];$coupon_id=$cv['coupon']['id'];}
-                else $error=$cv['error'];
-            }
-
-            if(!$error){
-                $total=max(0,$price+$tax_amt-$discount);
-                if($pay_method==='credit'&&(float)$client['credit_balance']<$total){
-                    $error='Insufficient credit balance. Please add funds first.';
+                if (!$fname || !$lname || !$email || !$pass) {
+                    $error = 'First name, last name, email and password are required to create an account.';
+                } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $error = 'Please enter a valid email address.';
                 } else {
-                    $order_num=generate_order_number();
-                    $r=DB::execute("INSERT INTO orders (client_id,order_number,total,currency,status,payment_method,promo_code,promo_discount) VALUES (?,?,?,?,'pending',?,?,?)",'isdsss' . 'd',[$client['id'],$order_num,$total,$currency,$pay_method,$coupon_code,$discount]);
-                    $order_id=$r['insert_id'];
-
-                    $next_due=match($cyc){
-                        'monthly'       =>date('Y-m-d',strtotime('+1 month')),
-                        'quarterly'     =>date('Y-m-d',strtotime('+3 months')),
-                        'semi_annually' =>date('Y-m-d',strtotime('+6 months')),
-                        'annually'      =>date('Y-m-d',strtotime('+1 year')),
-                        'biennially'    =>date('Y-m-d',strtotime('+2 years')),
-                        default         =>date('Y-m-d',strtotime('+1 month')),
-                    };
-
-                    $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
-                    DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),'pending')",'iiiisssds',[$client['id'],$order_id,$pid2,$reseller_id,$domain,$cyc,$price,$next_due]);
-                    $svc_id=DB::lastInsertId();
-
-                    $inv_id=Billing::createInvoice([
-                        'client_id'       =>$client['id'],
-                        'order_id'        =>$order_id,
-                        'currency'        =>$currency,
-                        'discount_amount' =>$discount,
-                        'items'           =>[['description'=>$prod['name'].' ('.ucfirst(str_replace('_',' ',$cyc)).')','unit_price'=>$price,'quantity'=>1,'service_id'=>$svc_id]],
-                    ]);
-
-                    if($coupon_id) Billing::applyCoupon($coupon_id);
-
-                    if($pay_method==='credit'){
-                        $pr=Billing::payInvoiceWithCredit($inv_id,$client['id']);
-                        if($pr['success']){
-                            DB::execute("UPDATE orders SET status='active' WHERE id=?",'i',[$order_id]);
-                            log_activity('order_placed',"Order #{$order_num} paid with credit",'client',$client['id']);
-                            redirect_with_flash(BASE_URL.'/client/invoices/view.php?id='.$inv_id,'success','Order placed! Your service is being activated.');
-                        } else { $error='Credit payment failed: '.$pr['error']; }
+                    // Check if email already registered
+                    $exists = DB::value("SELECT COUNT(*) FROM clients WHERE email=?", 's', [$email]);
+                    if ($exists > 0) {
+                        $error = 'An account with this email address already exists. Please sign in instead.';
                     } else {
-                        log_activity('order_placed',"Order #{$order_num} created",'client',$client['id']);
-                        redirect(BASE_URL.'/client/invoices/view.php?id='.$inv_id);
+                        $pw_hash = password_hash($pass, PASSWORD_BCRYPT);
+                        DB::execute(
+                            "INSERT INTO clients (first_name, last_name, email, password, phone, status, email_verified, credit_balance) VALUES (?, ?, ?, ?, ?, 'active', 1, 0.00)",
+                            'sssss', [$fname, $lname, $email, $pw_hash, $phone]
+                        );
+                        $new_cid = DB::lastInsertId();
+                        $client = DB::row("SELECT * FROM clients WHERE id=?", 'i', [$new_cid]);
+                        Auth::setClientSession($client);
+                    }
+                }
+            } else {
+                // Sign In
+                $lemail = trim(post('login_email',''));
+                $lpass = post('login_password','');
+                if (!$lemail || !$lpass) {
+                    $error = 'Please enter both your email address and password to sign in.';
+                } else {
+                    $auth_res = Auth::clientLogin($lemail, $lpass);
+                    if ($auth_res['success']) {
+                        $client = Auth::client();
+                    } else {
+                        $error = $auth_res['error'] ?? 'Invalid sign in credentials.';
+                    }
+                }
+            }
+        }
+
+        if (!$error && $client) {
+            $price_col='price_'.$cyc;
+            if (!empty($_SESSION['reseller_domain_id'])) {
+                require_once INC_PATH . '/modules/reseller.php';
+                $price = Reseller::getRetailPrice((int)$prod['id'], $cyc, (int)$_SESSION['reseller_domain_id']);
+            } else {
+                $price=(float)($prod[$price_col]??0);
+            }
+            if(!$price) { $error='Selected billing cycle not available.'; }
+            else {
+                $tax_enabled=DB::setting('tax_enabled','1')==='1';
+                $tax_rate=$tax_enabled?(float)DB::setting('tax_rate',0):0;
+                $tax_amt=round($price*($tax_rate/100),2);
+                $discount=0; $coupon_id=null;
+
+                if($coupon_code){
+                    $cv=Billing::validateCoupon($coupon_code,$client['id'],$price);
+                    if($cv['valid']){$discount=$cv['discount'];$coupon_id=$cv['coupon']['id'];}
+                    else $error=$cv['error'];
+                }
+
+                if(!$error){
+                    $total=max(0,$price+$tax_amt-$discount);
+                    if($pay_method==='credit'&&(float)$client['credit_balance']<$total){
+                        $error='Insufficient credit balance. Please add funds first.';
+                    } else {
+                        $order_num=generate_order_number();
+                        $r=DB::execute("INSERT INTO orders (client_id,order_number,total,currency,status,payment_method,promo_code,promo_discount) VALUES (?,?,?,?,'pending',?,?,?)",'isdsss' . 'd',[$client['id'],$order_num,$total,$currency,$pay_method,$coupon_code,$discount]);
+                        $order_id=$r['insert_id'];
+
+                        $next_due=match($cyc){
+                            'monthly'       =>date('Y-m-d',strtotime('+1 month')),
+                            'quarterly'     =>date('Y-m-d',strtotime('+3 months')),
+                            'semi_annually' =>date('Y-m-d',strtotime('+6 months')),
+                            'annually'      =>date('Y-m-d',strtotime('+1 year')),
+                            'biennially'    =>date('Y-m-d',strtotime('+2 years')),
+                            default         =>date('Y-m-d',strtotime('+1 month')),
+                        };
+
+                        $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
+                        DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),'pending')",'iiiisssds',[$client['id'],$order_id,$pid2,$reseller_id,$domain,$cyc,$price,$next_due]);
+                        $svc_id=DB::lastInsertId();
+
+                        $inv_id=Billing::createInvoice([
+                            'client_id'       =>$client['id'],
+                            'order_id'        =>$order_id,
+                            'currency'        =>$currency,
+                            'discount_amount' =>$discount,
+                            'items'           =>[['description'=>$prod['name'].' ('.ucfirst(str_replace('_',' ',$cyc)).')','unit_price'=>$price,'quantity'=>1,'service_id'=>$svc_id]],
+                        ]);
+
+                        if($coupon_id) Billing::applyCoupon($coupon_id);
+
+                        if($pay_method==='credit'){
+                            $pr=Billing::payInvoiceWithCredit($inv_id,$client['id']);
+                            if($pr['success']){
+                                DB::execute("UPDATE orders SET status='active' WHERE id=?",'i',[$order_id]);
+                                log_activity('order_placed',"Order #{$order_num} paid with credit",'client',$client['id']);
+                                redirect_with_flash(BASE_URL.'/client/invoices/view.php?id='.$inv_id,'success','Order placed! Your service is being activated.');
+                            } else { $error='Credit payment failed: '.$pr['error']; }
+                        } else {
+                            log_activity('order_placed',"Order #{$order_num} created",'client',$client['id']);
+                            redirect(BASE_URL.'/client/invoices/view.php?id='.$inv_id);
+                        }
                     }
                 }
             }
@@ -178,7 +231,7 @@ foreach($all_products as $p):
         <?php if(in_array($product['type'],['hosting','domain'])):?>
         <div class="bp-form-group">
           <label class="bp-label"><?=$product['type']==='domain'?'Domain Name':'Domain / Hostname'?> *</label>
-          <input type="text" name="domain" class="bp-input" placeholder="<?=$product['type']==='domain'?'example.com':'yourdomain.com'?>" required>
+          <input type="text" name="domain" class="bp-input" placeholder="<?=$product['type']==='domain'?'example.com':'yourdomain.com'?>" value="<?=h(get_param('domain'))?>" required>
         </div>
         <?php endif?>
 
@@ -191,6 +244,44 @@ foreach($all_products as $p):
           <div id="coupon-msg" style="font-size:13px;margin-top:6px"></div>
         </div>
 
+        <?php if(!$client): ?>
+        <div class="bp-form-group" style="margin-top:24px;border-top:1px solid #f1f5f9;padding-top:20px">
+          <label class="bp-label" style="font-size:15px;font-weight:800;color:#0f172a;margin-bottom:12px">👤 Account Details</label>
+          <div style="display:flex;background:#f8fafc;border-radius:10px;padding:4px;margin-bottom:16px">
+            <button type="button" id="tab-reg-btn" onclick="switchAuthTab('register')" style="flex:1;border:none;background:#3b82f6;color:#ffffff;font-size:13px;font-weight:600;padding:10px;border-radius:8px;transition:all 0.2s">Create Account</button>
+            <button type="button" id="tab-login-btn" onclick="switchAuthTab('login')" style="flex:1;border:none;background:transparent;color:#64748b;font-size:13px;font-weight:600;padding:10px;border-radius:8px;transition:all 0.2s">Already Registered? Sign In</button>
+          </div>
+          <input type="hidden" name="checkout_auth_type" id="checkout-auth-type" value="register">
+
+          <!-- Registration Fields -->
+          <div id="auth-reg-fields" style="display:block">
+            <div class="bp-form-row bp-form-row-2" style="margin-bottom:12px">
+              <div class="bp-form-group" style="margin-bottom:0"><label class="bp-label">First Name *</label><input type="text" name="first_name" class="bp-input" placeholder="John"></div>
+              <div class="bp-form-group" style="margin-bottom:0"><label class="bp-label">Last Name *</label><input type="text" name="last_name" class="bp-input" placeholder="Doe"></div>
+            </div>
+            <div class="bp-form-group"><label class="bp-label">Email Address *</label><input type="email" name="email" class="bp-input" placeholder="john.doe@example.com"></div>
+            <div class="bp-form-group"><label class="bp-label">Phone Number</label><input type="text" name="phone" class="bp-input" placeholder="+2348000000000"></div>
+            <div class="bp-form-group"><label class="bp-label">Account Password *</label><input type="password" name="password" class="bp-input" placeholder="Create secure password"></div>
+          </div>
+
+          <!-- Login Fields -->
+          <div id="auth-login-fields" style="display:none">
+            <div class="bp-form-group"><label class="bp-label">Email Address *</label><input type="email" name="login_email" class="bp-input" placeholder="john.doe@example.com"></div>
+            <div class="bp-form-group"><label class="bp-label">Password *</label><input type="password" name="login_password" class="bp-input" placeholder="Enter account password"></div>
+          </div>
+        </div>
+
+        <div class="bp-form-group">
+          <label class="bp-label">Payment Method</label>
+          <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid #3b82f6;background:#f0f9ff;border-radius:10px;cursor:pointer">
+            <input type="radio" name="payment_method" value="invoice" checked>
+            <div>
+              <span style="font-weight:700;font-size:13px;color:#0369a1">🧾 Generate Invoice</span>
+              <div style="font-size:12px;color:#0284c7;margin-top:2px">Pay using Bank Transfer, Stripe, Paystack, etc.</div>
+            </div>
+          </label>
+        </div>
+        <?php else: ?>
         <div class="bp-form-group">
           <label class="bp-label">Payment Method</label>
           <label style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border:1.5px solid #bbf7d0;background:#f0fdf4;border-radius:10px;margin-bottom:8px;cursor:pointer">
@@ -202,6 +293,7 @@ foreach($all_products as $p):
             <span style="font-size:13px">🧾 Generate Invoice (pay later)</span>
           </label>
         </div>
+        <?php endif; ?>
 
         <button type="submit" class="bp-btn bp-btn-primary" style="width:100%;justify-content:center;padding:13px;font-size:15px;margin-top:4px">Place Order →</button>
       </form>
@@ -289,6 +381,32 @@ async function applyCoupon(){
             updateSummary(curPrice);
         }else{discountAmt=0;msg.innerHTML='<span style="color:#ef4444">✕ '+d.error+'</span>';}
     }catch(e){msg.textContent='Error checking coupon.';}
+}
+
+function switchAuthTab(type) {
+    const regBtn = document.getElementById('tab-reg-btn');
+    const loginBtn = document.getElementById('tab-login-btn');
+    const regFields = document.getElementById('auth-reg-fields');
+    const loginFields = document.getElementById('auth-login-fields');
+    const authType = document.getElementById('checkout-auth-type');
+
+    if (type === 'register') {
+        regBtn.style.background = '#3b82f6';
+        regBtn.style.color = '#ffffff';
+        loginBtn.style.background = 'transparent';
+        loginBtn.style.color = '#64748b';
+        regFields.style.display = 'block';
+        loginFields.style.display = 'none';
+        authType.value = 'register';
+    } else {
+        loginBtn.style.background = '#3b82f6';
+        loginBtn.style.color = '#ffffff';
+        regBtn.style.background = 'transparent';
+        regBtn.style.color = '#64748b';
+        regFields.style.display = 'none';
+        loginFields.style.display = 'block';
+        authType.value = 'login';
+    }
 }
 </script>
 <?php include 'partials/footer.php';?>

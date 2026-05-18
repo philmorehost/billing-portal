@@ -32,6 +32,18 @@ class Auth {
         }
         redirect(BASE_URL.'/client/login.php');
     }
+    public static function client(): ?array {
+        if (!empty($_SESSION['client_id'])) {
+            $c=DB::row("SELECT * FROM clients WHERE id=? AND status='active'",'i',[$_SESSION['client_id']]);
+            if ($c) return $c;
+        }
+        if (!empty($_COOKIE['client_remember'])) {
+            [$id,$token]=explode(':',$_COOKIE['client_remember'],2)+['',''];
+            $c=DB::row("SELECT * FROM clients WHERE id=? AND remember_token=? AND status='active'",'is',[(int)$id,$token]);
+            if ($c) { self::setClientSession($c,true); return $c; }
+        }
+        return null;
+    }
     public static function clientLogout(): void {
         if (!empty($_SESSION['client_id'])) DB::execute("UPDATE clients SET remember_token=NULL WHERE id=?",'i',[$_SESSION['client_id']]);
         setcookie('client_remember','',['expires'=>1,'path'=>'/']);
