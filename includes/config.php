@@ -65,6 +65,12 @@ if (class_exists('DB') && file_exists($config_file)) {
             DB::execute("ALTER TABLE affiliates ADD COLUMN total_paid DECIMAL(15,2) DEFAULT 0.00 AFTER balance");
         }
 
+        // Auto-migrate: check if servers has password column
+        $cols = DB::rows("SHOW COLUMNS FROM servers LIKE 'password'");
+        if (empty($cols)) {
+            DB::execute("ALTER TABLE servers ADD COLUMN password VARCHAR(255) DEFAULT NULL AFTER username");
+        }
+
         // Auto-migrate: check if affiliate_referrals table exists
         $tables = DB::rows("SHOW TABLES LIKE 'affiliate_referrals'");
         if (empty($tables)) {

@@ -9,7 +9,7 @@ if(is_post()&&csrf_verify()){
         $port=(int)post('port',2087); $user=trim(post('username')); $api=trim(post('api_key'));
         $pw=post('password');
         if(!$name||!$host){redirect_with_flash('servers.php','danger','Name and hostname required.');}
-        DB::execute("INSERT INTO servers (name,type,hostname,port,username,password,api_key,status) VALUES (?,?,?,?,?,?,?,'active')",'sssiiss',[$name,$type,$host,$port,$user,$pw,$api]);
+        DB::execute("INSERT INTO servers (name,type,hostname,port,username,password,api_key,status) VALUES (?,?,?,?,?,?,?,'active')",'sssisss',[$name,$type,$host,$port,$user,$pw,$api]);
         redirect_with_flash('servers.php','success','Server added.');
     }
     if($action==='delete'){
