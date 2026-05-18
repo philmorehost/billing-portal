@@ -12,6 +12,12 @@ if (is_post() && csrf_verify()) {
     foreach ($keys as $key) {
         if (in_array($key, ['action','group','csrf_token'])) continue;
         $val = is_array($_POST[$key]) ? implode(',', $_POST[$key]) : trim($_POST[$key]);
+        
+        // Skip empty sensitive settings to respect "Leave blank to keep existing"
+        if ($val === '' && (strpos($key, 'password') !== false || strpos($key, 'api_key') !== false || strpos($key, 'secret') !== false || strpos($key, 'hash') !== false || strpos($key, 'key') !== false)) {
+            continue;
+        }
+        
         DB::setSetting($key, $val);
         $saved++;
     }
@@ -217,8 +223,8 @@ include 'partials/header.php';
         <!-- ConnectReseller -->
         <h5 style="font-weight:700;margin-bottom:16px;color:#0f172a">🔌 ConnectReseller</h5>
         <div class="bp-form-row bp-form-row-2">
-          <div class="bp-form-group"><label class="bp-label">Username</label><input type="text" name="module_connectreseller_username" class="bp-input" value="<?=h($s('module_connectreseller_username'))?>"></div>
-          <div class="bp-form-group"><label class="bp-label">Password</label><input type="password" name="module_connectreseller_password" class="bp-input" placeholder="Leave blank to keep existing"></div>
+          <div class="bp-form-group"><label class="bp-label">Brand ID</label><input type="text" name="module_connectreseller_brand_id" class="bp-input" value="<?=h($s('module_connectreseller_brand_id'))?>"></div>
+          <div class="bp-form-group"><label class="bp-label">API Key</label><input type="password" name="module_connectreseller_api_key" class="bp-input" placeholder="Leave blank to keep existing"></div>
         </div>
         <hr style="margin:24px 0;border-color:#f1f5f9">
 

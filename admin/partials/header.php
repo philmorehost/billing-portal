@@ -32,6 +32,7 @@ $page_title = $page_title ?? 'Dashboard';
   <div class="nav-section"><div class="nav-section-label">Services</div>
     <div class="nav-item"><a href="<?=BASE_URL?>/admin/services.php"><span class="nav-icon">🖥</span> Services</a></div>
     <div class="nav-item"><a href="<?=BASE_URL?>/admin/products.php"><span class="nav-icon">📦</span> Products</a></div>
+    <div class="nav-item"><a href="<?=BASE_URL?>/admin/domain-pricing.php"><span class="nav-icon">🌐</span> Domain Pricing</a></div>
     <div class="nav-item"><a href="<?=BASE_URL?>/admin/orders.php"><span class="nav-icon">🛒</span> Orders</a></div>
   </div>
   <div class="nav-section"><div class="nav-section-label">Support</div>

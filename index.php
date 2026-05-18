@@ -963,10 +963,21 @@ foreach ($products as $p) {
 
       <!-- Quick TLD list -->
       <div class="hp-tlds">
-        <span class="hp-tld-badge">.com <strong><?= format_currency(15000, $currency) ?></strong></span>
-        <span class="hp-tld-badge">.net <strong><?= format_currency(18000, $currency) ?></strong></span>
-        <span class="hp-tld-badge">.org <strong><?= format_currency(20000, $currency) ?></strong></span>
-        <span class="hp-tld-badge">.xyz <strong><?= format_currency(4500, $currency) ?></strong></span>
+        <?php
+        $active_tlds = DB::rows("SELECT * FROM domain_tlds WHERE status='active' ORDER BY retail_price_register ASC LIMIT 4");
+        if (!empty($active_tlds)):
+          require_once INC_PATH . '/modules/reseller.php';
+          $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
+          foreach ($active_tlds as $t):
+            $d_pricing = Reseller::getDomainPricing('domain.' . $t['tld'], $reseller_id);
+        ?>
+          <span class="hp-tld-badge">.<?= h($t['tld']) ?> <strong><?= format_currency($d_pricing['register'], $currency) ?></strong></span>
+        <?php endforeach; else: ?>
+          <span class="hp-tld-badge">.com <strong><?= format_currency(15000, $currency) ?></strong></span>
+          <span class="hp-tld-badge">.net <strong><?= format_currency(18000, $currency) ?></strong></span>
+          <span class="hp-tld-badge">.org <strong><?= format_currency(20000, $currency) ?></strong></span>
+          <span class="hp-tld-badge">.xyz <strong><?= format_currency(4500, $currency) ?></strong></span>
+        <?php endif; ?>
       </div>
     </div>
   </section>

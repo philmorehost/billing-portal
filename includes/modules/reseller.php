@@ -206,4 +206,64 @@ class Reseller {
         }
         return $count;
     }
+
+    /**
+     * Get retail register/renew/transfer pricing for a domain based on TLD
+     */
+    public static function getDomainPricing(string $domain, ?int $reseller_id = null): array {
+        $parts = explode('.', trim($domain));
+        $tld = strtolower(end($parts));
+
+        // Fetch TLD base pricing
+        $row = DB::row("SELECT * FROM domain_tlds WHERE tld=? AND status='active'", 's', [$tld]);
+        
+        if (!$row) {
+            // Default fallback pricing if not synced
+            $base = ['register' => 15000.00, 'renew' => 15000.00, 'transfer' => 15000.00];
+        } else {
+            $base = [
+                'register' => (float)$row['retail_price_register'],
+                'renew'    => (float)$row['retail_price_renew'],
+                'transfer' => (float)$row['retail_price_transfer']
+            ];
+        }
+
+        if ($reseller_id) {
+            // If reseller context: wholesale price = admin retail price - reseller default discount
+            $discount = (float)DB::setting('reseller_default_discount', 20);
+            
+            $wholesale = [
+                'register' => round($base['register'] * (1 - $discount / 100), 2),
+                'renew'    => round($base['renew'] * (1 - $discount / 100), 2),
+                'transfer' => round($base['transfer'] * (1 - $discount / 100), 2),
+            ];
+
+            // Look up reseller custom override markup on this specific TLD
+            $override = null;
+            if ($row) {
+                $override = DB::row("SELECT * FROM reseller_domain_prices WHERE reseller_id=? AND tld_id=?", 'ii', [$reseller_id, $row['id']]);
+            }
+
+            if ($override) {
+                // Use custom reseller override prices if calculated
+                return [
+                    'register' => $override['retail_price_register'] !== null ? (float)$override['retail_price_register'] : round($wholesale['register'] * (1 + (float)$override['markup_value'] / 100), 2),
+                    'renew'    => $override['retail_price_renew'] !== null ? (float)$override['retail_price_renew'] : round($wholesale['renew'] * (1 + (float)$override['markup_value'] / 100), 2),
+                    'transfer' => $override['retail_price_transfer'] !== null ? (float)$override['retail_price_transfer'] : round($wholesale['transfer'] * (1 + (float)$override['markup_value'] / 100), 2),
+                ];
+            } else {
+                // Fallback to reseller global markup
+                $reseller = DB::row("SELECT markup_percentage FROM resellers WHERE id=?", 'i', [$reseller_id]);
+                $markup = $reseller ? (float)$reseller['markup_percentage'] : 20.00;
+
+                return [
+                    'register' => round($wholesale['register'] * (1 + $markup / 100), 2),
+                    'renew'    => round($wholesale['renew'] * (1 + $markup / 100), 2),
+                    'transfer' => round($wholesale['transfer'] * (1 + $markup / 100), 2),
+                ];
+            }
+        }
+
+        return $base;
+    }
 }

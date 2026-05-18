@@ -117,6 +117,8 @@ INSERT IGNORE INTO `settings` (`setting_key`,`setting_value`,`setting_group`) VA
 ('module_namecheap_sandbox','1','modules'),
 ('module_connectreseller_username','','modules'),
 ('module_connectreseller_password','','modules'),
+('module_connectreseller_brand_id','','modules'),
+('module_connectreseller_api_key','','modules'),
 ('module_upperlink_api_key','','modules'),
 ('module_nocix_api_key','','modules'),
 ('module_nocix_default_location','dallas','modules'),

@@ -80,14 +80,21 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
         }
 
         if (!$error && $client) {
-            $price_col='price_'.$cyc;
-            if (!empty($_SESSION['reseller_domain_id'])) {
+            if ($prod['type'] === 'domain') {
                 require_once INC_PATH . '/modules/reseller.php';
-                $price = Reseller::getRetailPrice((int)$prod['id'], $cyc, (int)$_SESSION['reseller_domain_id']);
+                $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
+                $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
+                $price = $domain_pricing['register'];
             } else {
-                $price=(float)($prod[$price_col]??0);
+                $price_col='price_'.$cyc;
+                if (!empty($_SESSION['reseller_domain_id'])) {
+                    require_once INC_PATH . '/modules/reseller.php';
+                    $price = Reseller::getRetailPrice((int)$prod['id'], $cyc, (int)$_SESSION['reseller_domain_id']);
+                } else {
+                    $price=(float)($prod[$price_col]??0);
+                }
             }
-            if(!$price) { $error='Selected billing cycle not available.'; }
+            if(!$price) { $error='Selected pricing or domain registration not available.'; }
             else {
                 $tax_enabled=DB::setting('tax_enabled','1')==='1';
                 $tax_rate=$tax_enabled?(float)DB::setting('tax_rate',0):0;
@@ -303,20 +310,29 @@ foreach($all_products as $p):
   <div class="col-lg-5">
     <div class="bp-card"><div class="bp-card-header"><h3 class="bp-card-title">Order Summary</h3></div><div class="bp-card-body">
       <?php 
-      $first_ck = '';
-      foreach (['monthly','quarterly','semi_annually','annually','biennially'] as $c) {
-          if ((float)($product['price_'.$c]??0) > 0) {
-              $first_ck = $c;
-              break;
-          }
-      }
       $first_pr = 0;
-      if ($first_ck) {
-          if (!empty($_SESSION['reseller_domain_id'])) {
-              require_once INC_PATH . '/modules/reseller.php';
-              $first_pr = Reseller::getRetailPrice((int)$product['id'], $first_ck, (int)$_SESSION['reseller_domain_id']);
-          } else {
-              $first_pr = (float)($product['price_'.$first_ck]??0);
+      $first_ck = 'annually';
+      $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
+      require_once INC_PATH . '/modules/reseller.php';
+
+      if ($product['type'] === 'domain') {
+          $searched_domain = trim(get_param('domain', 'example.com'));
+          $domain_pricing = Reseller::getDomainPricing($searched_domain, $reseller_id);
+          $first_pr = $domain_pricing['register'];
+          $first_ck = 'annually';
+      } else {
+          foreach (['monthly','quarterly','semi_annually','annually','biennially'] as $c) {
+              if ((float)($product['price_'.$c]??0) > 0) {
+                  $first_ck = $c;
+                  break;
+              }
+          }
+          if ($first_ck) {
+              if ($reseller_id) {
+                  $first_pr = Reseller::getRetailPrice((int)$product['id'], $first_ck, $reseller_id);
+              } else {
+                  $first_pr = (float)($product['price_'.$first_ck]??0);
+              }
           }
       }
       ?>

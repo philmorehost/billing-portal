@@ -36,6 +36,7 @@ $pc=h($branding['color']);
     <div class="nav-section"><div class="nav-section-label">Services</div>
       <div class="nav-item"><a href="<?=BASE_URL?>/reseller/services.php"><span class="nav-icon">🖥</span> Services</a></div>
       <div class="nav-item"><a href="<?=BASE_URL?>/reseller/products.php"><span class="nav-icon">📦</span> Product Pricing</a></div>
+      <div class="nav-item"><a href="<?=BASE_URL?>/reseller/domain-pricing.php"><span class="nav-icon">🌐</span> Domain Markup</a></div>
     </div>
     <div class="nav-section"><div class="nav-section-label">Support</div>
       <div class="nav-item"><a href="<?=BASE_URL?>/reseller/tickets.php"><span class="nav-icon">🎫</span> Tickets</a></div>

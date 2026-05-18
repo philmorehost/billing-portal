@@ -53,6 +53,37 @@ foreach (['db','functions','auth','mailer'] as $f) {
 if (class_exists('DB') && file_exists($config_file)) {
     require_once INC_PATH . '/modules/reseller.php';
     try {
+        // Auto-migrate: Create domain_tlds table if not exists
+        DB::execute("CREATE TABLE IF NOT EXISTS `domain_tlds` (
+          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `tld` VARCHAR(50) NOT NULL UNIQUE,
+          `base_price_register` DECIMAL(15,2) NOT NULL,
+          `base_price_renew` DECIMAL(15,2) NOT NULL,
+          `base_price_transfer` DECIMAL(15,2) NOT NULL,
+          `markup_type` ENUM('percentage', 'fixed') DEFAULT 'percentage',
+          `markup_value` DECIMAL(15,2) DEFAULT 20.00,
+          `retail_price_register` DECIMAL(15,2) NOT NULL,
+          `retail_price_renew` DECIMAL(15,2) NOT NULL,
+          `retail_price_transfer` DECIMAL(15,2) NOT NULL,
+          `status` ENUM('active', 'inactive') DEFAULT 'active',
+          `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+        // Auto-migrate: Create reseller_domain_prices table if not exists
+        DB::execute("CREATE TABLE IF NOT EXISTS `reseller_domain_prices` (
+          `id` INT AUTO_INCREMENT PRIMARY KEY,
+          `reseller_id` INT NOT NULL,
+          `tld_id` INT NOT NULL,
+          `markup_type` ENUM('percentage', 'fixed') DEFAULT 'percentage',
+          `markup_value` DECIMAL(15,2) DEFAULT 20.00,
+          `retail_price_register` DECIMAL(15,2) DEFAULT NULL,
+          `retail_price_renew` DECIMAL(15,2) DEFAULT NULL,
+          `retail_price_transfer` DECIMAL(15,2) DEFAULT NULL,
+          `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY `reseller_tld` (`reseller_id`, `tld_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
         // Auto-migrate: check if resellers has bank_transfer_details column
         $cols = DB::rows("SHOW COLUMNS FROM resellers LIKE 'bank_transfer_details'");
         if (empty($cols)) {
