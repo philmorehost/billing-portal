@@ -20,7 +20,7 @@ if(is_post()&&csrf_verify()){
         // Get target clients
         $target=$camp['target_group'];
         $where_map=['all'=>"status='active'",'active'=>"status='active' AND (SELECT COUNT(*) FROM services s WHERE s.client_id=clients.id AND s.status='active')>0",'inactive'=>"status='inactive'",'resellers'=>"account_type='reseller' AND status='active'"];
-        $where=$where_map[$target]???"status='active'";
+        $where=$where_map[$target]?? "status='active'";
         $clients=DB::rows("SELECT email,first_name,last_name FROM clients WHERE {$where}");
 
         DB::execute("UPDATE email_campaigns SET status='sending' WHERE id=?",'i',[$cid]);

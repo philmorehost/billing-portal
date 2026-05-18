@@ -9,12 +9,24 @@ define('INC_PATH',  ROOT_PATH . '/includes');
 function app_base_url(): string {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $script = $_SERVER['SCRIPT_NAME'] ?? '';
-    $dir    = rtrim(dirname($script), '/\\');
-    $parts  = explode('/', trim($dir, '/'));
-    $subs   = ['admin','client','install','api','cron'];
-    $filtered = array_filter($parts, fn($p) => !in_array($p, $subs));
-    return $scheme . '://' . $host . '/' . implode('/', $filtered);
+    $root = str_replace('\\', '/', ROOT_PATH);
+    $script_file = str_replace('\\', '/', $_SERVER['SCRIPT_FILENAME'] ?? '');
+    $script_name = $_SERVER['SCRIPT_NAME'] ?? '';
+    $suffix = '';
+    if (strpos($script_file, $root) === 0) {
+        $suffix = substr($script_file, strlen($root));
+    }
+    $web_root = '';
+    if (!empty($suffix) && strpos($script_name, $suffix) !== false) {
+        $web_root = substr($script_name, 0, strrpos($script_name, $suffix));
+    } else {
+        $dir = rtrim(dirname($script_name), '/\\');
+        $parts = explode('/', trim($dir, '/'));
+        $subs = ['admin','client','install','api','cron','reports','clients','services','invoices','products','servers','tickets','partials'];
+        $filtered = array_filter($parts, fn($p) => !in_array($p, $subs));
+        $web_root = '/' . implode('/', $filtered);
+    }
+    return $scheme . '://' . $host . rtrim($web_root, '/');
 }
 define('BASE_URL', rtrim(app_base_url(), '/'));
 
@@ -45,6 +57,28 @@ if (class_exists('DB') && file_exists($config_file)) {
         $cols = DB::rows("SHOW COLUMNS FROM resellers LIKE 'bank_transfer_details'");
         if (empty($cols)) {
             DB::execute("ALTER TABLE resellers ADD COLUMN bank_transfer_details TEXT DEFAULT NULL");
+        }
+
+        // Auto-migrate: check if affiliates has total_paid column
+        $cols = DB::rows("SHOW COLUMNS FROM affiliates LIKE 'total_paid'");
+        if (empty($cols)) {
+            DB::execute("ALTER TABLE affiliates ADD COLUMN total_paid DECIMAL(15,2) DEFAULT 0.00 AFTER balance");
+        }
+
+        // Auto-migrate: check if affiliate_referrals table exists
+        $tables = DB::rows("SHOW TABLES LIKE 'affiliate_referrals'");
+        if (empty($tables)) {
+            DB::execute("CREATE TABLE IF NOT EXISTS `affiliate_referrals` (
+              `id` int NOT NULL AUTO_INCREMENT,
+              `affiliate_id` int NOT NULL,
+              `referred_client_id` int NOT NULL,
+              `commission_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+              `status` enum('pending','approved','paid','cancelled') DEFAULT 'pending',
+              `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (`id`),
+              KEY `affiliate_id` (`affiliate_id`),
+              KEY `referred_client_id` (`referred_client_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         }
 
         // Auto-migrate email template: upgrade invoice_created to responsive summary layout

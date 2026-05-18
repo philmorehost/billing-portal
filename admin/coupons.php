@@ -59,7 +59,7 @@ include 'partials/header.php';
       <tr>
         <td style="font-weight:700;font-family:monospace;letter-spacing:1px"><?=h($c['code'])?></td>
         <td><?=$c['type']==='percentage'?$c['value'].'%':format_currency($c['value'],DB::setting('base_currency','NGN'))?></td>
-        <td><?=$c['uses_count']?'/'.($c['max_uses']??'∞')?></td>
+        <td><?= ($c['uses_count'] ?? 0) . '/' . ($c['max_uses'] ?? '∞') ?></td>
         <td style="font-size:13px;color:#64748b"><?=$c['valid_until']?format_date($c['valid_until']):'No limit'?></td>
         <td><span class="bp-badge bp-badge-<?=$c['status']==='active'?'success':'muted'?>"><?=$c['status']?></span></td>
         <td><div class="d-flex gap-1">

@@ -27,7 +27,33 @@ CREATE TABLE IF NOT EXISTS `transactions` (`id` int NOT NULL AUTO_INCREMENT,`cli
 
 CREATE TABLE IF NOT EXISTS `coupons` (`id` int NOT NULL AUTO_INCREMENT,`code` varchar(50) NOT NULL,`type` enum('percentage','fixed') DEFAULT 'percentage',`value` decimal(10,2) NOT NULL,`max_uses` int DEFAULT NULL,`uses_count` int DEFAULT 0,`max_uses_per_client` int DEFAULT 1,`valid_from` date DEFAULT NULL,`valid_until` date DEFAULT NULL,`status` enum('active','inactive') DEFAULT 'active',`created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY (`id`),UNIQUE KEY `code` (`code`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS `affiliates` (`id` int NOT NULL AUTO_INCREMENT,`client_id` int NOT NULL,`referral_code` varchar(20) NOT NULL,`commission_type` enum('percentage','fixed') DEFAULT 'percentage',`commission_value` decimal(10,2) DEFAULT 10.00,`balance` decimal(15,2) DEFAULT 0.00,`total_earned` decimal(15,2) DEFAULT 0.00,`status` enum('active','inactive') DEFAULT 'active',`created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY (`id`),UNIQUE KEY `client_id` (`client_id`),UNIQUE KEY `referral_code` (`referral_code`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS `affiliates` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `client_id` int NOT NULL,
+  `referral_code` varchar(20) NOT NULL,
+  `commission_type` enum('percentage','fixed') DEFAULT 'percentage',
+  `commission_value` decimal(10,2) DEFAULT 10.00,
+  `balance` decimal(15,2) DEFAULT 0.00,
+  `total_paid` decimal(15,2) DEFAULT 0.00,
+  `total_earned` decimal(15,2) DEFAULT 0.00,
+  `status` enum('active','inactive') DEFAULT 'active',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `client_id` (`client_id`),
+  UNIQUE KEY `referral_code` (`referral_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `affiliate_referrals` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `affiliate_id` int NOT NULL,
+  `referred_client_id` int NOT NULL,
+  `commission_amount` decimal(15,2) NOT NULL DEFAULT 0.00,
+  `status` enum('pending','approved','paid','cancelled') DEFAULT 'pending',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `affiliate_id` (`affiliate_id`),
+  KEY `referred_client_id` (`referred_client_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `email_templates` (`id` int NOT NULL AUTO_INCREMENT,`name` varchar(100) NOT NULL,`slug` varchar(100) NOT NULL,`subject` varchar(255) NOT NULL,`body_html` longtext NOT NULL,`is_system` tinyint(1) DEFAULT 0,`status` enum('active','inactive') DEFAULT 'active',`created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,`updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,PRIMARY KEY (`id`),UNIQUE KEY `slug` (`slug`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
