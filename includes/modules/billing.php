@@ -260,6 +260,69 @@ class Billing {
         return ['success' => true, 'data' => $resp['data']];
     }
 
+    // ── Plisio Cryptocurrency ──────────────────────────────────────────────
+
+    public static function plisioInitialize(int $inv_id): array {
+        $inv = DB::row("SELECT i.*, c.email, c.first_name, c.last_name FROM invoices i JOIN clients c ON c.id=i.client_id WHERE i.id=?", 'i', [$inv_id]);
+        if (!$inv) return ['success' => false, 'error' => 'Invoice not found.'];
+
+        $apiKey = DB::setting('crypto_plisio_api_key');
+        if (!$apiKey) return ['success' => false, 'error' => 'Plisio API is not configured. Please contact the administrator.'];
+
+        $currency = $inv['currency'] ?? 'NGN';
+        $amount = (float)$inv['total'];
+        if ($currency !== 'USD') {
+            $source_amount = self::convertToUSD($amount);
+            $source_currency = 'USD';
+        } else {
+            $source_amount = $amount;
+            $source_currency = 'USD';
+        }
+
+        $allowed_coins = DB::setting('crypto_plisio_allowed_coins', 'BTC,LTC,USDT,ETH');
+        $ref = 'INV-' . $inv['invoice_number'] . '-' . time();
+
+        $params = [
+            'source_currency' => $source_currency,
+            'source_amount'   => $source_amount,
+            'order_number'    => $ref,
+            'order_name'      => 'Invoice #' . $inv['invoice_number'],
+            'email'           => $inv['email'],
+            'callback_url'    => BASE_URL . '/api/plisio-webhook.php?json=true',
+            'allowed_psys_cids' => $allowed_coins,
+            'api_key'         => $apiKey
+        ];
+
+        $url = 'https://api.plisio.net/api/v1/invoices/new?' . http_build_query($params);
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL            => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_SSL_VERIFYPEER => true
+        ]);
+        $resp = curl_exec($ch);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        if ($err) {
+            return ['success' => false, 'error' => 'Plisio gateway connection timeout.'];
+        }
+
+        $data = json_decode($resp, true);
+        if (empty($data) || ($data['status'] ?? '') !== 'success') {
+            $msg = $data['data']['message'] ?? ($data['message'] ?? 'Unable to generate crypto invoice.');
+            return ['success' => false, 'error' => 'Plisio API Error: ' . $msg];
+        }
+
+        return [
+            'success'  => true,
+            'auth_url' => $data['data']['invoice_url'],
+            'reference' => $ref
+        ];
+    }
+
     public static function getBankDetails(int $inv_id): string {
         // 1. Try to find the reseller linked to the invoice order
         $reseller = DB::row("

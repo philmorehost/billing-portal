@@ -57,6 +57,7 @@ if (class_exists('DB') && file_exists($config_file)) {
         DB::execute("CREATE TABLE IF NOT EXISTS `domain_tlds` (
           `id` INT AUTO_INCREMENT PRIMARY KEY,
           `tld` VARCHAR(50) NOT NULL UNIQUE,
+          `registrar` VARCHAR(50) DEFAULT 'none',
           `base_price_register` DECIMAL(15,2) NOT NULL,
           `base_price_renew` DECIMAL(15,2) NOT NULL,
           `base_price_transfer` DECIMAL(15,2) NOT NULL,
@@ -69,6 +70,12 @@ if (class_exists('DB') && file_exists($config_file)) {
           `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+        // Auto-migrate: check if domain_tlds has registrar column
+        $cols = DB::rows("SHOW COLUMNS FROM `domain_tlds` LIKE 'registrar'");
+        if (empty($cols)) {
+            DB::execute("ALTER TABLE `domain_tlds` ADD COLUMN `registrar` VARCHAR(50) DEFAULT 'none' AFTER `tld`");
+        }
 
         // Auto-migrate: Create reseller_domain_prices table if not exists
         DB::execute("CREATE TABLE IF NOT EXISTS `reseller_domain_prices` (

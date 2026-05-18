@@ -26,7 +26,17 @@ class ProvisioningDispatcher {
         );
         if (!$service || !$service['module']) return null;
 
-        return self::buildModule($service['module'], $service['server_id'], $service['module_config']);
+        $module = $service['module'];
+        if (!empty($service['domain'])) {
+            $parts = explode('.', trim($service['domain']));
+            $tld = strtolower(end($parts));
+            $tld_row = DB::row("SELECT registrar FROM domain_tlds WHERE tld=?", 's', [$tld]);
+            if ($tld_row && !empty($tld_row['registrar']) && $tld_row['registrar'] !== 'none') {
+                $module = $tld_row['registrar'];
+            }
+        }
+
+        return self::buildModule($module, $service['server_id'], $service['module_config']);
     }
 
     public static function buildModule(string $module, ?int $server_id = null, ?string $module_config_json = null): ?ProvisioningBase {

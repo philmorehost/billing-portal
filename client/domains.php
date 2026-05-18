@@ -61,6 +61,14 @@ include 'partials/header.php';
   $expiry=$d['next_due_date']?strtotime($d['next_due_date']):0;
   $days_left=$expiry?ceil(($expiry-time())/86400):null;
   $expiring=$days_left!==null&&$days_left<=30;
+
+  $parts = explode('.', trim($d['domain'] ?? ''));
+  $tld = strtolower(end($parts));
+  $tld_row = DB::row("SELECT registrar FROM domain_tlds WHERE tld=?", 's', [$tld]);
+  $registrar = $d['module'] ? ucfirst(h($d['module'])) : 'Manual';
+  if ($tld_row && !empty($tld_row['registrar']) && $tld_row['registrar'] !== 'none') {
+      $registrar = $tld_row['registrar'] === 'connectreseller' ? 'ConnectReseller' : ($tld_row['registrar'] === 'resellerclub' ? 'ResellerClub' : ucfirst(h($tld_row['registrar'])));
+  }
 ?>
 <div class="bp-card" style="margin-bottom:16px">
   <div style="background:linear-gradient(135deg,#0f172a,#1e3a5f);padding:20px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
@@ -68,7 +76,7 @@ include 'partials/header.php';
       <div style="font-size:28px">🌐</div>
       <div>
         <div style="color:#fff;font-size:18px;font-weight:800;font-family:monospace"><?=h($d['domain']??'—')?></div>
-        <div style="color:rgba(255,255,255,.5);font-size:12px"><?=h($d['pname'])?> · <?=$d['module']?h($d['module']):'Manual'?></div>
+        <div style="color:rgba(255,255,255,.5);font-size:12px"><?=h($d['pname'])?> · <?=$registrar?></div>
       </div>
     </div>
     <div style="text-align:right">

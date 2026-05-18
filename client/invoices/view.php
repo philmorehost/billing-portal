@@ -27,6 +27,11 @@ if(is_post()&&csrf_verify()){
         if($r['success']) redirect($r['auth_url']);
         else $error=$r['error'];
     }
+    if($action==='pay_plisio'){
+        $r=Billing::plisioInitialize($inv_id);
+        if($r['success']) redirect($r['auth_url']);
+        else $error=$r['error'];
+    }
     if($action==='submit_manual'){
         $gw=post('gateway'); $ref=trim(post('reference')); $notes=trim(post('payment_notes'));
         DB::execute("INSERT INTO transactions (client_id,invoice_id,type,amount,currency,gateway,gateway_ref,description,status) VALUES (?,'payment',?,?,?,?,?,'Awaiting approval','pending')",'iiidssss',[$client['id'],$inv_id,$inv['total'],$currency,$gw,$ref,$notes]);
@@ -170,17 +175,18 @@ include dirname(dirname(__FILE__)).'/partials/header.php';
           <button type="submit" class="bp-btn bp-btn-accent" style="width:100%;justify-content:center">Pay with Paystack →</button></form>
         </div>
         <?php endif?>
-        <?php if($bt_on||$cr_on):?>
+        <?php if($cr_on):?>
+        <div style="background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">Pay with Cryptocurrency (Plisio)</div>
+          <form method="POST"><?=csrf_input()?><input type="hidden" name="action" value="pay_plisio">
+          <button type="submit" class="bp-btn bp-btn-warning" style="width:100%;justify-content:center;background:#f59e0b;color:#fff;border:none">Pay with Crypto →</button></form>
+        </div>
+        <?php endif?>
+        <?php if($bt_on):?>
         <div style="background:#f8fafc;border-radius:10px;padding:16px">
-          <div style="font-size:13px;font-weight:600;margin-bottom:12px">Manual Payment</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:12px">Manual Payment (Bank Transfer)</div>
           <form method="POST"><?=csrf_input()?><input type="hidden" name="action" value="submit_manual">
-          <div class="bp-form-group"><label class="bp-label">Method</label>
-            <select name="gateway" class="bp-select" onchange="showD(this.value)">
-              <?php if($bt_on):?><option value="bank_transfer">Bank Transfer</option><?php endif?>
-              <?php if($cr_on):?><option value="crypto">Cryptocurrency</option><?php endif?>
-            </select>
-          </div>
-          <?php if($bt_on):?>
+          <input type="hidden" name="gateway" value="bank_transfer">
           <div id="d-bank_transfer" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;font-size:13px;margin-bottom:16px">
             <div style="font-weight:700;color:#0f172a;margin-bottom:12px;display:flex;align-items:center;gap:6px">
               <span>🏦</span> Bank Transfer Details
@@ -209,8 +215,6 @@ include dirname(dirname(__FILE__)).'/partials/header.php';
               ?>
             </div>
           </div>
-          <?php endif?>
-          <?php if($cr_on):?><div id="d-crypto" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;margin-bottom:12px;white-space:pre-line;display:none"><?=h(DB::setting('crypto_details'))?></div><?php endif?>
           <div class="bp-form-group"><label class="bp-label">Transaction Reference *</label><input type="text" name="reference" class="bp-input" placeholder="Transaction ID / Hash" required></div>
           <div class="bp-form-group"><label class="bp-label">Notes</label><textarea name="payment_notes" class="bp-textarea" rows="2"></textarea></div>
           <button type="submit" class="bp-btn bp-btn-primary" style="width:100%;justify-content:center">Submit Payment Proof</button></form>

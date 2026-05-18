@@ -149,7 +149,7 @@ include 'partials/header.php';
         </div>
         <div class="bp-form-group"><label class="bp-label">Bank Details (shown to clients)</label><textarea name="bank_transfer_details" class="bp-textarea" rows="5"><?= h($s('bank_transfer_details')) ?></textarea></div>
         <hr style="margin:24px 0;border-color:#f1f5f9">
-        <h5 style="font-weight:700;margin-bottom:16px">Cryptocurrency</h5>
+        <h5 style="font-weight:700;margin-bottom:16px">Cryptocurrency (Plisio Integration)</h5>
         <div class="bp-form-group">
           <label class="bp-label">Crypto Enabled</label>
           <select name="crypto_enabled" class="bp-select">
@@ -157,7 +157,15 @@ include 'partials/header.php';
             <option value="0" <?= $s('crypto_enabled')==='0'?'selected':'' ?>>Disabled</option>
           </select>
         </div>
-        <div class="bp-form-group"><label class="bp-label">Crypto Payment Details</label><textarea name="crypto_details" class="bp-textarea" rows="5" placeholder="BTC Address: ..."><?= h($s('crypto_details')) ?></textarea></div>
+        <div class="bp-form-group">
+          <label class="bp-label">Plisio Secret / API Key</label>
+          <input type="password" name="crypto_plisio_api_key" class="bp-input" placeholder="Leave blank to keep existing">
+        </div>
+        <div class="bp-form-group">
+          <label class="bp-label">Allowed Cryptocurrencies</label>
+          <input type="text" name="crypto_plisio_allowed_coins" class="bp-input" value="<?= h($s('crypto_plisio_allowed_coins','BTC,LTC,USDT,ETH')) ?>" placeholder="BTC,LTC,USDT,ETH">
+          <div class="bp-input-hint">Comma-separated list of coin codes that clients can pay with (e.g., BTC,LTC,USDT,ETH).</div>
+        </div>
 
         <?php elseif ($tab === 'security'): ?>
         <div class="bp-form-row bp-form-row-2">

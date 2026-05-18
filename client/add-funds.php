@@ -26,6 +26,10 @@ if(is_post()&&csrf_verify()){
             $r=Billing::paystackInitialize($inv_id,post('pay_currency','NGN'));
             if($r['success']) redirect($r['auth_url']);
             else $error=$r['error'];
+        } elseif($gateway==='plisio'){
+            $r=Billing::plisioInitialize($inv_id);
+            if($r['success']) redirect($r['auth_url']);
+            else $error=$r['error'];
         } else {
             DB::execute("INSERT INTO transactions (client_id,invoice_id,type,amount,currency,gateway,gateway_ref,description,status) VALUES (?,'credit',?,?,?,?,?,'Add funds - awaiting approval','pending')",'iiidssss',[$client['id'],$inv_id,$amount,$currency,$gateway,trim(post('reference')),'']);
             $ae=DB::setting('company_email');
@@ -92,10 +96,10 @@ include 'partials/header.php';
               </label>
               <?php endif?>
               <?php if($cr_on):?>
-              <label style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1.5px solid #e2e8f0;border-radius:10px;cursor:pointer" class="method-opt" onclick="selectMethod('crypto',this)">
-                <input type="radio" name="gateway" value="crypto" style="display:none">
+              <label style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1.5px solid #e2e8f0;border-radius:10px;cursor:pointer" class="method-opt" onclick="selectMethod('plisio',this)">
+                <input type="radio" name="gateway" value="plisio" style="display:none">
                 <span style="font-size:22px">₿</span>
-                <div><div style="font-weight:600;font-size:14px">Cryptocurrency</div><div style="font-size:12px;color:#64748b">BTC / ETH / USDT. Manual review.</div></div>
+                <div><div style="font-weight:600;font-size:14px">Cryptocurrency (Plisio)</div><div style="font-size:12px;color:#64748b">Instant automated coin payments.</div></div>
               </label>
               <?php endif?>
             </div>
@@ -151,9 +155,7 @@ include 'partials/header.php';
             </div>
           </div>
           <?php endif?>
-          <?php if($cr_on):?>
-          <div id="d-crypto" style="display:none;background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:16px;font-size:13px;white-space:pre-line"><?=h(DB::setting('crypto_details'))?></div>
-          <?php endif?>
+
 
           <button type="submit" class="bp-btn bp-btn-primary" style="width:100%;justify-content:center;padding:13px;font-size:15px">Proceed →</button>
         </form>
@@ -192,8 +194,8 @@ function selectMethod(m,el){
   el.style.borderColor='#3b82f6';
   el.querySelector('input').checked=true;
   document.getElementById('paystack-opts').style.display=m==='paystack'?'block':'none';
-  document.getElementById('manual-ref').style.display=m!=='paystack'?'block':'none';
-  ['d-bank_transfer','d-crypto'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  document.getElementById('manual-ref').style.display=(m!=='paystack' && m!=='plisio')?'block':'none';
+  ['d-bank_transfer'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   const det=document.getElementById('d-'+m);if(det)det.style.display='block';
 }
 <?php if($ps_on):?>document.querySelector('.method-opt').click();<?php endif?>
