@@ -90,6 +90,10 @@ if(!$pid && get_param('type')==='domain'){
 }
 $product=$pid?DB::row("SELECT p.*,pg.name AS group_name FROM products p LEFT JOIN product_groups pg ON pg.id=p.group_id WHERE p.id=? AND p.visible=1",'i',[$pid]):null;
 
+if ($pid && !$product) {
+    $error = 'Selected product not found or is currently unavailable.';
+}
+
 // AJAX coupon check
 if(is_post()&&csrf_verify()&&post('action')==='apply_coupon'){
     $code=strtoupper(trim(post('coupon_code')));
@@ -388,7 +392,7 @@ include 'partials/header.php';
 </div>
 <?php if($error):?><div class="alert-custom alert-danger mb-3"><span>✕</span> <?=h($error)?></div><?php endif?>
 
-<?php if(!$product && !get_param('product_id')): ?>
+<?php if(!$product): ?>
 <div class="row g-4">
   <!-- WHMCS Style Sidebar Categories -->
   <div class="col-lg-3">
