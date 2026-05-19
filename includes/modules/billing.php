@@ -207,12 +207,23 @@ class Billing {
         if (!$secret) return ['success' => false, 'error' => 'Paystack not configured.'];
 
         // Convert amount based on currency selection
-        $amount_ngn = (float) $inv['total'];
-        if ($currency === 'USD') {
-            $amount_usd = self::convertToUSD($amount_ngn);
-            $pay_amount = (int) round($amount_usd * 100); // Paystack in kobo/cents
+        $inv_cur = $inv['currency'] ?? 'NGN';
+        $total = (float)$inv['total'];
+        $rate = (float)DB::setting('usd_exchange_rate', 1600);
+
+        if ($inv_cur === 'USD') {
+            $amount_usd = $total;
+            $amount_ngn = $total * $rate;
         } else {
-            $pay_amount = (int) round($amount_ngn * 100);
+            $amount_ngn = $total;
+            $amount_usd = $total / $rate;
+        }
+
+        if ($currency === 'USD') {
+            $pay_amount = (int) round($amount_usd * 100); // Paystack in cents
+        } else {
+            $pay_amount = (int) round($amount_ngn * 100); // Paystack in kobo
+            $currency = 'NGN'; // Force NGN
         }
 
         $ref = 'INV-' . $inv['invoice_number'] . '-' . time();

@@ -3,7 +3,76 @@ require_once '../includes/config.php';
 require_once INC_PATH.'/modules/billing.php';
 $client=Auth::client();
 $company=DB::setting('company_name','Billing Portal');
-$currency=DB::setting('base_currency','NGN');
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!function_exists('get_client_ip')) {
+    function get_client_ip(): string {
+        foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'] as $key) {
+            if (!empty($_SERVER[$key])) {
+                $ips = explode(',', $_SERVER[$key]);
+                $ip = trim($ips[0]);
+                if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                    return $ip;
+                }
+            }
+        }
+        return '127.0.0.1';
+    }
+}
+
+if (!function_exists('get_client_country_by_ip')) {
+    function get_client_country_by_ip(): string {
+        if (isset($_SESSION['client_country_code'])) {
+            return $_SESSION['client_country_code'];
+        }
+        $ip = get_client_ip();
+        if ($ip === '127.0.0.1' || $ip === '::1') {
+            return 'NG';
+        }
+        $ch = curl_init("http://ip-api.com/json/" . urlencode($ip));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+        $resp = curl_exec($ch);
+        curl_close($ch);
+        if ($resp) {
+            $data = json_decode($resp, true);
+            if (!empty($data['countryCode'])) {
+                $_SESSION['client_country_code'] = strtoupper($data['countryCode']);
+                return $_SESSION['client_country_code'];
+            }
+        }
+        $_SESSION['client_country_code'] = 'US';
+        return 'US';
+    }
+}
+
+if (!function_exists('convert_price')) {
+    function convert_price(float $amount, string $from_cur, string $to_cur): float {
+        if ($from_cur === $to_cur) return $amount;
+        $rate = (float) DB::setting('usd_exchange_rate', 1600);
+        if ($from_cur === 'NGN' && $to_cur === 'USD') {
+            return round($amount / $rate, 2);
+        }
+        if ($from_cur === 'USD' && $to_cur === 'NGN') {
+            return round($amount * $rate, 2);
+        }
+        return $amount;
+    }
+}
+
+if (isset($_GET['currency']) && in_array(strtoupper($_GET['currency']), ['NGN', 'USD'])) {
+    $_SESSION['currency'] = strtoupper($_GET['currency']);
+}
+
+if (!isset($_SESSION['currency'])) {
+    $country = get_client_country_by_ip();
+    $_SESSION['currency'] = ($country === 'NG') ? 'NGN' : 'USD';
+}
+
+$currency = $_SESSION['currency'];
+
 // Self-heal corrupted product currencies from previous edit/duplicate database specifier bugs
 DB::execute("UPDATE products SET currency = ? WHERE currency = '0' OR currency = '' OR currency IS NULL", 's', [$currency]);
 $page_title='Order';
@@ -87,6 +156,7 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                 $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
                 $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
                 $price = $domain_pricing['register'];
+                $price = convert_price($price, 'NGN', $currency);
             } else {
                 $price_col='price_'.$cyc;
                 if (!empty($_SESSION['reseller_domain_id'])) {
@@ -95,6 +165,8 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                 } else {
                     $price=(float)($prod[$price_col]??0);
                 }
+                $prod_cur = $prod['currency'] ?: 'NGN';
+                $price = convert_price($price, $prod_cur, $currency);
             }
             if(!$price) { $error='Selected pricing or domain registration not available.'; }
             else {
@@ -218,7 +290,21 @@ include 'partials/header.php';
     line-height: 1.6;
   }
 </style>
-<h1 class="bp-page-title" style="margin-bottom: 24px">🛒 Services Order Form</h1>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+  <h1 class="bp-page-title" style="margin:0">🛒 Services Order Form</h1>
+  
+  <!-- Premium Currency Switcher -->
+  <form method="GET" id="currency-switcher-form" style="display:flex;align-items:center;gap:8px;background:#ffffff;padding:6px 16px;border:1px solid #e2e8f0;border-radius:30px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all 0.2s" onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.04)'">
+    <?php foreach ($_GET as $gk => $gv): if($gk === 'currency') continue; ?>
+      <input type="hidden" name="<?=h($gk)?>" value="<?=h($gv)?>">
+    <?php endforeach; ?>
+    <span style="font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px">Store Currency:</span>
+    <select name="currency" onchange="document.getElementById('currency-switcher-form').submit()" style="border:none;background:transparent;font-weight:700;font-size:13px;color:#0f172a;cursor:pointer;outline:none;padding:2px 4px">
+      <option value="NGN" <?=$currency==='NGN'?'selected':''?>>₦ NGN</option>
+      <option value="USD" <?=$currency==='USD'?'selected':''?>>$ USD</option>
+    </select>
+  </form>
+</div>
 <?php if($error):?><div class="alert-custom alert-danger mb-3"><span>✕</span> <?=h($error)?></div><?php endif?>
 
 <?php if(!$product && !get_param('product_id')): ?>
@@ -379,21 +465,24 @@ include 'partials/header.php';
                       if ($p_monthly > 0) $p_monthly = Reseller::getRetailPrice((int)$p['id'], 'monthly', (int)$_SESSION['reseller_domain_id']);
                       if ($p_annually > 0) $p_annually = Reseller::getRetailPrice((int)$p['id'], 'annually', (int)$_SESSION['reseller_domain_id']);
                   }
+                  $prod_cur = $p['currency'] ?: 'NGN';
+                  $p_monthly = convert_price($p_monthly, $prod_cur, $currency);
+                  $p_annually = convert_price($p_annually, $prod_cur, $currency);
                   if ($p_monthly): 
                   ?>
                     <div style="font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px">
-                      <?=format_currency($p_monthly, $p['currency'] ?? $currency)?>
+                      <?=format_currency($p_monthly, $currency)?>
                       <span style="font-size: 12px; font-weight: 500; color: #64748b">/mo</span>
                     </div>
                   <?php elseif ($p_annually): ?>
                     <div style="font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px">
-                      <?=format_currency($p_annually, $p['currency'] ?? $currency)?>
+                      <?=format_currency($p_annually, $currency)?>
                       <span style="font-size: 12px; font-weight: 500; color: #64748b">/yr</span>
                     </div>
                   <?php endif; ?>
                   
                   <?php if ($p_monthly && $p_annually): ?>
-                    <div style="font-size: 11.5px; color: #10b981; font-weight: 600; margin-top: 2px">or <?=format_currency($p_annually, $p['currency'] ?? $currency)?>/yr</div>
+                    <div style="font-size: 11.5px; color: #10b981; font-weight: 600; margin-top: 2px">or <?=format_currency($p_annually, $currency)?>/yr</div>
                   <?php endif; ?>
                 </div>
                 
@@ -436,11 +525,13 @@ include 'partials/header.php';
                   require_once INC_PATH . '/modules/reseller.php';
                   $pr = Reseller::getRetailPrice((int)$product['id'], $ck, (int)$_SESSION['reseller_domain_id']);
               }
+              $prod_cur = $product['currency'] ?: 'NGN';
+              $pr_conv = convert_price($pr, $prod_cur, $currency);
             ?>
-            <label style="border:1.5px solid <?=$first_cycle?'#3b82f6':'#e2e8f0'?>;border-radius:10px;padding:12px;cursor:pointer;transition:all .2s;text-align:center" class="cycle-opt" data-price="<?=$pr?>" data-cycle="<?=$ck?>">
+            <label style="border:1.5px solid <?=$first_cycle?'#3b82f6':'#e2e8f0'?>;border-radius:10px;padding:12px;cursor:pointer;transition:all .2s;text-align:center" class="cycle-opt" data-price="<?=$pr_conv?>" data-cycle="<?=$ck?>">
               <input type="radio" name="cycle_radio" value="<?=$ck?>" <?=$first_cycle?'checked':''?> style="display:none">
               <div style="font-weight:600;font-size:12px;color:#64748b"><?=$cl?></div>
-              <div style="font-size:15px;font-weight:800;color:#0f172a;margin-top:4px"><?=format_currency($pr,$currency)?></div>
+              <div style="font-size:15px;font-weight:800;color:#0f172a;margin-top:4px"><?=format_currency($pr_conv,$currency)?></div>
             </label>
             <?php $first_cycle=false; endforeach?>
           </div>
@@ -530,6 +621,7 @@ include 'partials/header.php';
           $searched_domain = trim(get_param('domain', 'example.com'));
           $domain_pricing = Reseller::getDomainPricing($searched_domain, $reseller_id);
           $first_pr = $domain_pricing['register'];
+          $first_pr = convert_price($first_pr, 'NGN', $currency);
           $first_ck = 'annually';
       } else {
           foreach (['monthly','quarterly','semi_annually','annually','biennially'] as $c) {
@@ -544,6 +636,8 @@ include 'partials/header.php';
               } else {
                   $first_pr = (float)($product['price_'.$first_ck]??0);
               }
+              $prod_cur = $product['currency'] ?: 'NGN';
+              $first_pr = convert_price($first_pr, $prod_cur, $currency);
           }
       }
       ?>

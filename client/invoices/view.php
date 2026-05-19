@@ -168,9 +168,20 @@ include dirname(dirname(__FILE__)).'/partials/header.php';
         <div style="background:#f8fafc;border-radius:10px;padding:16px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:600;margin-bottom:10px">Pay with Card (Paystack)</div>
           <form method="POST"><?=csrf_input()?><input type="hidden" name="action" value="pay_paystack">
+          <?php 
+          $inv_currency = $inv['currency'] ?? 'NGN';
+          $rate = (float)DB::setting('usd_exchange_rate', 1600);
+          if ($inv_currency === 'USD') {
+              $display_usd = $inv['total'];
+              $display_ngn = $inv['total'] * $rate;
+          } else {
+              $display_ngn = $inv['total'];
+              $display_usd = $inv['total'] / $rate;
+          }
+          ?>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="pay_currency" value="NGN" checked> NGN</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="pay_currency" value="USD"> USD (~$<?=number_format(Billing::convertToUSD($inv['total']),2)?>)</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="pay_currency" value="NGN" checked> NGN (₦<?=number_format($display_ngn, 2)?>)</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="pay_currency" value="USD"> USD ($<?=number_format($display_usd, 2)?>)</label>
           </div>
           <button type="submit" class="bp-btn bp-btn-accent" style="width:100%;justify-content:center">Pay with Paystack →</button></form>
         </div>
