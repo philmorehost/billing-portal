@@ -7,12 +7,19 @@ $errors=[];
 
 if(is_post()&&csrf_verify()){
     $name=trim(post('name')); $type=post('type'); $cur=post('currency');
+    $slug=slug(trim(post('slug')));
     $gid=(int)post('group_id')||null; $wd=(float)post('wholesale_discount',0);
     if(!$name) $errors[]='Product name required.';
+    if(!$slug) $errors[]='Slug (URL Friendly Name) required.';
+    
+    // Check if slug is unique
+    $existing=DB::value("SELECT id FROM products WHERE slug=? AND id!=?",'si',[$slug, $pid]);
+    if($existing) $errors[]='The slug is already used by another product.';
+    
     if(empty($errors)){
-        DB::execute("UPDATE products SET group_id=?,name=?,description=?,type=?,price_monthly=?,price_quarterly=?,price_semi_annually=?,price_annually=?,price_biennially=?,setup_fee=?,currency=?,wholesale_discount=?,module=?,tax_enabled=?,auto_provision=?,visible=? WHERE id=?",
-            'issssddddddsdsiii',[
-                $gid?:null,post('name'),post('description'),post('type'),
+        DB::execute("UPDATE products SET group_id=?,name=?,slug=?,description=?,type=?,price_monthly=?,price_quarterly=?,price_semi_annually=?,price_annually=?,price_biennially=?,setup_fee=?,currency=?,wholesale_discount=?,module=?,tax_enabled=?,auto_provision=?,visible=? WHERE id=?",
+            'isssssddddddsdsiii',[
+                $gid?:null,post('name'),$slug,post('description'),post('type'),
                 (float)post('price_monthly')?:null,(float)post('price_quarterly')?:null,(float)post('price_semi_annually')?:null,
                 (float)post('price_annually')?:null,(float)post('price_biennially')?:null,(float)post('setup_fee',0),
                 post('currency'),post('wholesale_discount',0),post('module')?:null,
@@ -38,11 +45,12 @@ include '../partials/header.php';
     <div class="bp-card"><div class="bp-card-header"><h3 class="bp-card-title">Product Details</h3></div><div class="bp-card-body">
       <div class="bp-form-row bp-form-row-2">
         <div class="bp-form-group"><label class="bp-label">Product Name *</label><input type="text" name="name" class="bp-input" value="<?=h(post('name'))?>" required></div>
+        <div class="bp-form-group"><label class="bp-label">Slug (URL Friendly Name) *</label><input type="text" name="slug" class="bp-input" value="<?=h(post('slug'))?>" required><div class="bp-input-hint" style="margin-top:2px;font-size:11px">Used for URL: /client/order.php?product=<span>[slug]</span></div></div>
+      </div>
+      <div class="bp-form-row bp-form-row-3">
         <div class="bp-form-group"><label class="bp-label">Type</label>
           <select name="type" class="bp-select"><?php foreach(['hosting','domain','vps','dedicated','other'] as $t):?><option value="<?=$t?>" <?=post('type')===$t?'selected':''?>><?=ucfirst($t)?></option><?php endforeach?></select>
         </div>
-      </div>
-      <div class="bp-form-row bp-form-row-2">
         <div class="bp-form-group"><label class="bp-label">Group</label>
           <select name="group_id" class="bp-select"><option value="">No Group</option><?php foreach($groups as $g):?><option value="<?=$g['id']?>" <?=post('group_id')==$g['id']?'selected':''?>><?=h($g['name'])?></option><?php endforeach?></select>
         </div>

@@ -158,7 +158,7 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
 }
 
 $store_groups = DB::rows("SELECT * FROM product_groups WHERE visible=1 ORDER BY sort_order, name");
-$selected_group_id = get_param('group') !== null ? (get_param('group') === 'all' ? 'all' : (int)get_param('group')) : null;
+$selected_group_id = (isset($_GET['group']) && $_GET['group'] !== '') ? ($_GET['group'] === 'all' ? 'all' : (int)$_GET['group']) : null;
 
 $is_domain_view = (isset($_GET['type']) && $_GET['type'] === 'domain');
 if ($selected_group_id === null && !$is_domain_view && !empty($store_groups) && !get_param('product_id')) {
