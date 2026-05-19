@@ -51,10 +51,10 @@ include 'partials/header.php';
     <div class="bp-card" style="margin-top:16px">
       <div class="bp-card-header"><h3 class="bp-card-title">Quick Actions</h3></div>
       <div class="bp-card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <a href="order.php" class="bp-btn bp-btn-primary" style="justify-content:center">🛒 Order</a>
+        <a href="order.php" class="bp-btn bp-btn-primary" style="justify-content:center">🛒 Order Hosting</a>
+        <a href="order.php?type=domain" class="bp-btn bp-btn-primary" style="justify-content:center;background:#2563eb;border-color:#2563eb">🌐 Register Domain</a>
         <a href="add-funds.php" class="bp-btn bp-btn-outline" style="justify-content:center">💳 Add Funds</a>
         <a href="tickets/open.php" class="bp-btn bp-btn-outline" style="justify-content:center">🎫 Support</a>
-        <a href="profile.php" class="bp-btn bp-btn-outline" style="justify-content:center">👤 Profile</a>
       </div>
     </div>
   </div>

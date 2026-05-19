@@ -33,7 +33,8 @@ $page_title=$page_title??'Client Area';
   <div class="nav-section"><div class="nav-section-label">Services</div>
     <div class="nav-item"><a href="<?=BASE_URL?>/client/services.php"><span class="nav-icon">🖥</span> My Services</a></div>
     <div class="nav-item"><a href="<?=BASE_URL?>/client/domains.php"><span class="nav-icon">🌐</span> My Domains</a></div>
-    <div class="nav-item"><a href="<?=BASE_URL?>/client/order.php"><span class="nav-icon">🛒</span> Order New</a></div>
+    <div class="nav-item"><a href="<?=BASE_URL?>/client/order.php"><span class="nav-icon">🛒</span> Order Products</a></div>
+    <div class="nav-item"><a href="<?=BASE_URL?>/client/order.php?type=domain"><span class="nav-icon">🎯</span> Register / Transfer Domain</a></div>
   </div>
   <div class="nav-section"><div class="nav-section-label">Billing</div>
     <div class="nav-item"><a href="<?=BASE_URL?>/client/invoices.php"><span class="nav-icon">🧾</span> Invoices</a></div>
