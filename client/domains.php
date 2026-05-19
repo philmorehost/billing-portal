@@ -98,11 +98,13 @@ include 'partials/header.php';
         <form method="POST"><?=csrf_input()?><input type="hidden" name="action" value="update_ns"><input type="hidden" name="service_id" value="<?=$d['id']?>">
           <?php
           $current_ns=$md['nameservers']??[];
-          for($i=1;$i<=4;$i++):$placeholder=$i<=2?'Required':'Optional';$val=$current_ns[$i-1]??'';
+          for($i=1;$i<=4;$i++) {
+              $placeholder=$i<=2?'Required':'Optional';
+              $val=$current_ns[$i-1]??'';
           ?>
-          <div class="bp-form-group"><label class="bp-label">Nameserver <?=$i?> <?=$i<=2?'*':''?></label>
-            <input type="text" name="ns<?=$i?>" class="bp-input" value="<?=h($val)?>" placeholder="ns<?=$i?>.yourdns.com" <?=$i<=2?'required':''>></div>
-          <?php endfor?>
+          <div class="bp-form-group"><label class="bp-label">Nameserver <?php echo $i; ?> <?php echo ($i<=2?'*':''); ?></label>
+            <input type="text" name="ns<?php echo $i; ?>" class="bp-input" value="<?php echo h($val); ?>" placeholder="ns<?php echo $i; ?>.yourdns.com" <?php echo ($i<=2?'required':''); ?>></div>
+          <?php } ?>
           <button type="submit" class="bp-btn bp-btn-primary bp-btn-sm" <?=$d['module']?'':'disabled'?>>Update Nameservers</button>
           <?php if(!$d['module']):?><div class="bp-input-hint">Nameserver updates not available for manually managed domains.</div><?php endif?>
         </form>

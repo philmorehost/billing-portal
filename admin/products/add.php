@@ -10,14 +10,15 @@ if(is_post()&&csrf_verify()){
     $gid=(int)post('group_id')||null; $desc=trim(post('description')); $module=trim(post('module'));
     $tax=(int)!empty($_POST['tax_enabled']); $visible=(int)!empty($_POST['visible']);
     $auto=(int)!empty($_POST['auto_provision']); $wd=(float)post('wholesale_discount',0);
+    $req_dom=(int)!empty($_POST['require_domain']); $comp_dom=(int)!empty($_POST['compulsory_new_domain']);
     if(!$name) $errors[]='Product name required.';
     if(empty($errors)){
         $sl=slug($name);
         // Ensure unique slug
         $existing=DB::value("SELECT id FROM products WHERE slug=?",'s',[$sl]);
         if($existing) $sl=$sl.'-'.time();
-        DB::execute("INSERT INTO products (group_id,name,slug,description,type,price_monthly,price_quarterly,price_semi_annually,price_annually,price_biennially,setup_fee,currency,wholesale_discount,module,tax_enabled,auto_provision,visible) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            'issssddddddsdsiii',[$gid?:null,$name,$sl,$desc,$type,(float)$pm?:null,(float)$pq?:null,(float)$psa?:null,(float)$pa?:null,(float)$pb?:null,(float)$sf,$cur,$wd,$module?:null,$tax,$auto,$visible]);
+        DB::execute("INSERT INTO products (group_id,name,slug,description,type,price_monthly,price_quarterly,price_semi_annually,price_annually,price_biennially,setup_fee,currency,wholesale_discount,module,tax_enabled,auto_provision,visible,require_domain,compulsory_new_domain) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            'issssddddddsdsiiiii',[$gid?:null,$name,$sl,$desc,$type,(float)$pm?:null,(float)$pq?:null,(float)$psa?:null,(float)$pa?:null,(float)$pb?:null,(float)$sf,$cur,$wd,$module?:null,$tax,$auto,$visible,$req_dom,$comp_dom]);
         redirect_with_flash(BASE_URL.'/admin/products.php','success','Product created successfully.');
     }
 }
@@ -88,6 +89,8 @@ include '../partials/header.php';
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="tax_enabled" value="1" <?=post('tax_enabled','1')?'checked':''?>> Apply Tax</label>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="auto_provision" value="1" <?=post('auto_provision','1')?'checked':''?>> Auto-Provision on Payment</label>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="visible" value="1" <?=post('visible','1')?'checked':''?>> Visible to Clients</label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="require_domain" value="1" <?=post('require_domain')?'checked':''?>> Require Domain Name</label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="compulsory_new_domain" value="1" <?=post('compulsory_new_domain')?'checked':''?>> Registration is Compulsory (Must register a new domain)</label>
       </div>
     </div></div>
 

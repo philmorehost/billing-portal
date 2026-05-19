@@ -17,13 +17,14 @@ if(is_post()&&csrf_verify()){
     if($existing) $errors[]='The slug is already used by another product.';
     
     if(empty($errors)){
-        DB::execute("UPDATE products SET group_id=?,name=?,slug=?,description=?,type=?,price_monthly=?,price_quarterly=?,price_semi_annually=?,price_annually=?,price_biennially=?,setup_fee=?,currency=?,wholesale_discount=?,module=?,tax_enabled=?,auto_provision=?,visible=? WHERE id=?",
-            'issssddddddsdsiiii',[
+        DB::execute("UPDATE products SET group_id=?,name=?,slug=?,description=?,type=?,price_monthly=?,price_quarterly=?,price_semi_annually=?,price_annually=?,price_biennially=?,setup_fee=?,currency=?,wholesale_discount=?,module=?,tax_enabled=?,auto_provision=?,visible=?,require_domain=?,compulsory_new_domain=? WHERE id=?",
+            'issssddddddsdsiiiiii',[
                 $gid?:null,post('name'),$slug,post('description'),post('type'),
                 (float)post('price_monthly')?:null,(float)post('price_quarterly')?:null,(float)post('price_semi_annually')?:null,
                 (float)post('price_annually')?:null,(float)post('price_biennially')?:null,(float)post('setup_fee',0),
                 post('currency'),post('wholesale_discount',0),post('module')?:null,
                 (int)!empty($_POST['tax_enabled']),(int)!empty($_POST['auto_provision']),(int)!empty($_POST['visible']),
+                (int)!empty($_POST['require_domain']),(int)!empty($_POST['compulsory_new_domain']),
                 $pid
             ]);
         redirect_with_flash(BASE_URL.'/admin/products.php','success','Product updated.');
@@ -92,6 +93,8 @@ include '../partials/header.php';
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="tax_enabled" value="1" <?=post('tax_enabled')?'checked':''?>> Apply Tax</label>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="auto_provision" value="1" <?=post('auto_provision')?'checked':''?>> Auto-Provision</label>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="visible" value="1" <?=post('visible')?'checked':''?>> Visible</label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="require_domain" value="1" <?=post('require_domain')?'checked':''?>> Require Domain Name</label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="compulsory_new_domain" value="1" <?=post('compulsory_new_domain')?'checked':''?>> Registration is Compulsory (Must register a new domain)</label>
       </div>
     </div></div>
     <div class="bp-card" style="margin-top:16px"><div class="bp-card-body"><button type="submit" class="bp-btn bp-btn-primary" style="width:100%;justify-content:center;padding:13px">💾 Update Product</button></div></div>

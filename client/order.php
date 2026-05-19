@@ -67,6 +67,19 @@ $currency = $_SESSION['currency'];
 
 // Self-heal corrupted product currencies from previous edit/duplicate database specifier bugs
 DB::execute("UPDATE products SET currency = ? WHERE currency = '0' OR currency = '' OR currency IS NULL", 's', [$currency]);
+
+// Dynamic database schema upgrades for domain settings
+try {
+    $cols = DB::rows("SHOW COLUMNS FROM products LIKE 'require_domain'");
+    if (empty($cols)) {
+        DB::execute("ALTER TABLE products ADD COLUMN require_domain TINYINT(1) DEFAULT 0");
+    }
+    $cols2 = DB::rows("SHOW COLUMNS FROM products LIKE 'compulsory_new_domain'");
+    if (empty($cols2)) {
+        DB::execute("ALTER TABLE products ADD COLUMN compulsory_new_domain TINYINT(1) DEFAULT 0");
+    }
+} catch (Exception $e) {}
+
 $page_title='Order';
 $error='';
 
@@ -84,19 +97,95 @@ if(is_post()&&csrf_verify()&&post('action')==='apply_coupon'){
     json_response(Billing::validateCoupon($code,$client ? $client['id'] : 0,$price));
 }
 
+// AJAX domain availability checker
+if (is_post() && post('action') === 'check_domain') {
+    $domain = trim(post('domain'));
+    if (empty($domain)) {
+        json_response(['success' => false, 'error' => 'Domain name is required.']);
+    }
+    
+    // Extract SLD and TLD
+    $domain = strtolower(preg_replace('/^https?:\/\/(www\.)?/', '', $domain));
+    if (!preg_match('/^[a-z0-9\-]+\.[a-z0-9\.]+$/', $domain)) {
+        json_response(['success' => false, 'error' => 'Invalid domain format. Use example.com']);
+    }
+    
+    // Perform check
+    $available = true;
+    // 1. Quick DNS check
+    if (checkdnsrr($domain, 'NS') || checkdnsrr($domain, 'A') || checkdnsrr($domain, 'MX')) {
+        $available = false;
+    } else {
+        // 2. Quick WHOIS check
+        $parts = explode('.', $domain);
+        $tld = end($parts);
+        $whois_servers = [
+            'com' => 'whois.verisign-grs.com',
+            'net' => 'whois.verisign-grs.com',
+            'org' => 'whois.pir.org',
+            'info' => 'whois.afilias.net',
+            'biz' => 'whois.nic.biz',
+            'us' => 'whois.nic.us',
+            'uk' => 'whois.nic.uk',
+            'ca' => 'whois.cira.ca',
+            'de' => 'whois.denic.de',
+            'ng' => 'whois.nic.net.ng',
+        ];
+        $server = $whois_servers[$tld] ?? 'whois.iana.org';
+        $fp = @fsockopen($server, 43, $errno, $errstr, 2);
+        if ($fp) {
+            fputs($fp, $domain . "\r\n");
+            $out = "";
+            while (!feof($fp)) { $out .= fgets($fp, 128); }
+            fclose($fp);
+            $out = strtolower($out);
+            $taken_keywords = ['domain name:', 'registrar:', 'registration date:', 'expiration date:', 'creation date:', 'name server:', 'status: active', 'registered'];
+            foreach ($taken_keywords as $keyword) {
+                if (strpos($out, $keyword) !== false) {
+                    $available = false;
+                    break;
+                }
+            }
+        }
+    }
+    
+    json_response(['success' => true, 'available' => $available]);
+}
+
 // Place order
 if(is_post()&&csrf_verify()&&post('action')==='place_order'){
     $pid2=(int)post('product_id');
     $cyc=post('cycle','monthly');
-    $domain=trim(post('domain',''));
     $coupon_code=strtoupper(trim(post('coupon_code','')));
     $pay_method=post('payment_method','credit');
 
     $prod=DB::row("SELECT * FROM products WHERE id=? AND visible=1",'i',[$pid2]);
     if(!$prod) { $error='Product not found.'; }
     else {
+        // Enforce domain requirements
+        $req_domain = (bool)($prod['require_domain'] || in_array($prod['type'], ['hosting', 'domain']));
+        $comp_new = (bool)($prod['compulsory_new_domain'] || $prod['type'] === 'domain');
+        
+        $domain_opt = post('domain_option', 'existing');
+        $domain = '';
+        if ($comp_new) {
+            $domain_opt = 'register';
+        }
+        
+        if ($domain_opt === 'register') {
+            $domain = trim(post('domain') !== '' ? post('domain') : post('domain_reg'));
+        } else {
+            $domain = trim(post('domain_existing'));
+        }
+        
+        if ($req_domain && empty($domain)) {
+            $error = 'A domain name is required for this product.';
+        } elseif ($comp_new && $domain_opt !== 'register') {
+            $error = 'You must register a new domain name for this product.';
+        }
+
         // Handle inline guest registration or login if client not logged in
-        if (!$client) {
+        if (!$error && !$client) {
             $auth_type = post('checkout_auth_type', 'register');
             if ($auth_type === 'register') {
                 $fname = trim(post('first_name',''));
@@ -529,12 +618,44 @@ include 'partials/header.php';
           </div>
         </div>
 
-        <?php if(in_array($product['type'],['hosting','domain'])):?>
-        <div class="bp-form-group">
-          <label class="bp-label"><?=$product['type']==='domain'?'Domain Name':'Domain / Hostname'?> *</label>
-          <input type="text" name="domain" class="bp-input" placeholder="<?=$product['type']==='domain'?'example.com':'yourdomain.com'?>" value="<?=h(get_param('domain'))?>" required>
+        <?php if($product['require_domain'] || in_array($product['type'],['hosting','domain'])):?>
+        <div class="bp-form-group" style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:16px; padding:20px; margin-bottom:20px">
+          <label class="bp-label" style="font-size:14px; font-weight:700; color:#0f172a; margin-bottom:12px">🌐 Domain Configuration</label>
+          
+          <?php if($product['compulsory_new_domain'] || $product['type'] === 'domain'): ?>
+            <!-- Only show register new domain option -->
+            <input type="hidden" name="domain_option" id="domain-option" value="register">
+            <div style="font-size:13px; color:#475569; margin-bottom:12px; font-weight:600">Register a new domain name for your service:</div>
+            <div style="display:flex; gap:8px">
+              <input type="text" id="domain-search-input" name="domain" class="bp-input" placeholder="example.com" value="<?=h(get_param('domain'))?>" required style="flex:1">
+              <button type="button" id="domain-search-btn" class="bp-btn bp-btn-primary" style="padding:10px 20px" onclick="checkDomainAvailability()">Search</button>
+            </div>
+            <div id="domain-search-feedback" style="margin-top:10px; font-size:13px; font-weight:600"></div>
+          <?php else: ?>
+            <!-- Show choice between register new domain and use existing domain -->
+            <div style="display:flex; background:#e2e8f0; border-radius:10px; padding:4px; margin-bottom:16px">
+              <button type="button" id="tab-domain-reg-btn" onclick="switchDomainTab('register')" style="flex:1; border:none; background:#3b82f6; color:#ffffff; font-size:12.5px; font-weight:700; padding:10px; border-radius:8px; transition:all 0.2s">Register New Domain</button>
+              <button type="button" id="tab-domain-existing-btn" onclick="switchDomainTab('existing')" style="flex:1; border:none; background:transparent; color:#64748b; font-size:12.5px; font-weight:700; padding:10px; border-radius:8px; transition:all 0.2s">Use Existing Domain</button>
+            </div>
+            <input type="hidden" name="domain_option" id="domain-option" value="register">
+            
+            <!-- Register New Domain Section -->
+            <div id="domain-reg-section" style="display:block">
+              <div style="display:flex; gap:8px">
+                <input type="text" id="domain-search-input" name="domain_reg" class="bp-input" placeholder="example.com" value="" style="flex:1">
+                <button type="button" id="domain-search-btn" class="bp-btn bp-btn-primary" style="padding:10px 20px" onclick="checkDomainAvailability()">Search</button>
+              </div>
+              <div id="domain-search-feedback" style="margin-top:10px; font-size:13px; font-weight:600"></div>
+            </div>
+            
+            <!-- Use Existing Domain Section -->
+            <div id="domain-existing-section" style="display:none">
+              <div style="font-size:12.5px; color:#64748b; margin-bottom:8px">Enter your existing domain name and update its nameservers to point to us:</div>
+              <input type="text" id="domain-existing-input" name="domain_existing" class="bp-input" placeholder="yourdomain.com" value="">
+            </div>
+          <?php endif; ?>
         </div>
-        <?php endif?>
+        <?php endif; ?>
 
         <div class="bp-form-group">
           <label class="bp-label">Coupon Code</label>
@@ -721,5 +842,112 @@ function switchAuthTab(type) {
         authType.value = 'login';
     }
 }
+
+let domainChecked = false;
+let domainAvailable = false;
+
+function switchDomainTab(type) {
+    const regBtn = document.getElementById('tab-domain-reg-btn');
+    const existingBtn = document.getElementById('tab-domain-existing-btn');
+    const regSection = document.getElementById('domain-reg-section');
+    const existingSection = document.getElementById('domain-existing-section');
+    const domainOption = document.getElementById('domain-option');
+    
+    if (!regBtn || !existingBtn) return;
+    
+    if (type === 'register') {
+        regBtn.style.background = '#3b82f6';
+        regBtn.style.color = '#ffffff';
+        existingBtn.style.background = 'transparent';
+        existingBtn.style.color = '#64748b';
+        regSection.style.display = 'block';
+        existingSection.style.display = 'none';
+        domainOption.value = 'register';
+    } else {
+        existingBtn.style.background = '#3b82f6';
+        existingBtn.style.color = '#ffffff';
+        regBtn.style.background = 'transparent';
+        regBtn.style.color = '#64748b';
+        regSection.style.display = 'none';
+        existingSection.style.display = 'block';
+        domainOption.value = 'existing';
+    }
+}
+
+async function checkDomainAvailability() {
+    const input = document.getElementById('domain-search-input');
+    const btn = document.getElementById('domain-search-btn');
+    const feedback = document.getElementById('domain-search-feedback');
+    if (!input || !feedback) return;
+    const domain = input.value.trim();
+    
+    if (!domain) {
+        feedback.innerHTML = '<span style="color:#ef4444">✕ Please enter a domain name to search.</span>';
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.textContent = 'Searching...';
+    feedback.innerHTML = '<span style="color:#64748b">🔍 Checking availability...</span>';
+    
+    try {
+        const fd = new FormData();
+        fd.append('action', 'check_domain');
+        fd.append('domain', domain);
+        fd.append('csrf_token', '<?=csrf_token()?>');
+        
+        const r = await fetch(window.location.href, { method: 'POST', body: fd });
+        const d = await r.json();
+        
+        if (d.success) {
+            if (d.available) {
+                domainChecked = true;
+                domainAvailable = true;
+                feedback.innerHTML = '<span style="color:#10b981">✓ Premium Choice! ' + domain + ' is available!</span>';
+            } else {
+                domainChecked = true;
+                domainAvailable = false;
+                feedback.innerHTML = '<span style="color:#ef4444">✕ Sorry, ' + domain + ' is already taken. Try another name.</span>';
+            }
+        } else {
+            feedback.innerHTML = '<span style="color:#ef4444">✕ ' + d.error + '</span>';
+        }
+    } catch (e) {
+        feedback.innerHTML = '<span style="color:#ef4444">✕ Error connecting to domain server.</span>';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Search';
+    }
+}
+
+// Reset check state on input type change
+document.getElementById('domain-search-input')?.addEventListener('input', () => {
+    domainChecked = false;
+    domainAvailable = false;
+    const feedback = document.getElementById('domain-search-feedback');
+    if (feedback) feedback.innerHTML = '';
+});
+
+// Intercept form submit to validate domain
+document.getElementById('order-form')?.addEventListener('submit', (e) => {
+    const option = document.getElementById('domain-option')?.value || 'register';
+    if (option === 'register' && document.getElementById('domain-search-input')) {
+        const input = document.getElementById('domain-search-input');
+        if (input.required || input.value.trim() !== '') {
+            if (!domainChecked) {
+                e.preventDefault();
+                alert('Please search and verify if your chosen domain is available first!');
+                input.focus();
+                return;
+            }
+            if (!domainAvailable) {
+                e.preventDefault();
+                alert('The domain you chose is taken. Please search for an available domain.');
+                input.focus();
+                return;
+            }
+        }
+    }
+});
 </script>
 <?php include 'partials/footer.php';?>
