@@ -196,6 +196,26 @@ $tax_rate_display=DB::setting('tax_enabled','1')==='1'?(float)DB::setting('tax_r
 include 'partials/header.php';
 ?>
 <div class="bp-content">
+<style>
+  .order-products-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  @media (max-width: 992px) {
+    .order-products-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .product-desc-multiline {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 13.5px;
+    color: #64748b;
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+</style>
 <h1 class="bp-page-title" style="margin-bottom: 24px">🛒 Services Order Form</h1>
 <?php if($error):?><div class="alert-custom alert-danger mb-3"><span>✕</span> <?=h($error)?></div><?php endif?>
 
@@ -325,28 +345,30 @@ include 'partials/header.php';
       ?>
 
       <!-- Products Listing Grid -->
-      <div style="display: flex; flex-direction: column; gap: 16px">
+      <div class="order-products-grid">
         <?php 
         $last_grp = '';
         foreach ($products_to_show as $p): 
           if (!$p['price_monthly'] && !$p['price_annually']) continue;
           if ($selected_group_id === 'all' && $p['group_name'] !== $last_grp): $last_grp = $p['group_name'];
         ?>
-          <h3 style="font-size: 12px; font-weight: 800; color: #475569; text-transform: uppercase; margin: 16px 0 4px; letter-spacing: 0.5px"><?=h($p['group_name'] ?: 'General Products')?></h3>
+          <h3 style="grid-column: 1 / -1; font-size: 12px; font-weight: 800; color: #475569; text-transform: uppercase; margin: 20px 0 4px; letter-spacing: 0.5px"><?=h($p['group_name'] ?: 'General Products')?></h3>
         <?php endif; ?>
 
-          <div class="bp-card" style="border: 1px solid #e2e8f0; transition: border-color 0.2s, box-shadow 0.2s" onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.05)'" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
-            <div class="bp-card-body" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 20px 24px">
-              <div style="flex: 1; min-width: 250px">
-                <div style="font-size: 18px; font-weight: 800; color: #0f172a"><?=h($p['name'])?></div>
+          <div class="bp-card" style="border: 1px solid #e2e8f0; border-radius: 20px; transition: border-color 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; height: 100%; overflow: hidden" onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 8px 24px rgba(59, 130, 246, 0.06)'" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+            <div class="bp-card-body" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 24px; gap: 16px">
+              <div style="flex: 1">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px">
+                  <div style="font-size: 17px; font-weight: 800; color: #0f172a; line-height: 1.3"><?=h($p['name'])?></div>
+                  <span class="bp-badge bp-badge-info" style="text-transform: capitalize; background: #eff6ff; color: #2563eb; font-weight: 700; border: 1px solid rgba(37, 99, 235, 0.1); font-size: 11px; padding: 2px 8px; border-radius: 20px"><?=$p['type']?></span>
+                </div>
                 <?php if ($p['description']): ?>
-                  <div style="font-size: 13.5px; color: #64748b; margin-top: 6px; line-height: 1.5"><?=h($p['description'])?></div>
+                  <div class="product-desc-multiline"><?=nl2br(h($p['description']))?></div>
                 <?php endif; ?>
-                <span class="bp-badge bp-badge-info" style="margin-top: 10px; text-transform: capitalize; background: #eff6ff; color: #2563eb; font-weight: 700; border: 1px solid rgba(37, 99, 235, 0.1)"><?=$p['type']?></span>
               </div>
               
-              <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap">
-                <div style="text-align: right">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 16px; border-top: 1px solid #f1f5f9; gap: 12px">
+                <div>
                   <?php 
                   $p_monthly = (float)($p['price_monthly'] ?? 0);
                   $p_annually = (float)($p['price_annually'] ?? 0);
@@ -357,18 +379,24 @@ include 'partials/header.php';
                   }
                   if ($p_monthly): 
                   ?>
-                    <div style="font-size: 24px; font-weight: 900; color: #0f172a">
+                    <div style="font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px">
                       <?=format_currency($p_monthly, $p['currency'] ?? $currency)?>
-                      <span style="font-size: 13px; font-weight: 500; color: #64748b">/mo</span>
+                      <span style="font-size: 12px; font-weight: 500; color: #64748b">/mo</span>
+                    </div>
+                  <?php elseif ($p_annually): ?>
+                    <div style="font-size: 22px; font-weight: 900; color: #0f172a; letter-spacing: -0.5px">
+                      <?=format_currency($p_annually, $p['currency'] ?? $currency)?>
+                      <span style="font-size: 12px; font-weight: 500; color: #64748b">/yr</span>
                     </div>
                   <?php endif; ?>
-                  <?php if ($p_annually): ?>
-                    <div style="font-size: 12.5px; color: #10b981; font-weight: 600; margin-top: 2px">or <?=format_currency($p_annually, $p['currency'] ?? $currency)?>/yr</div>
+                  
+                  <?php if ($p_monthly && $p_annually): ?>
+                    <div style="font-size: 11.5px; color: #10b981; font-weight: 600; margin-top: 2px">or <?=format_currency($p_annually, $p['currency'] ?? $currency)?>/yr</div>
                   <?php endif; ?>
                 </div>
                 
-                <a href="?product_id=<?=$p['id']?>" class="bp-btn bp-btn-primary" style="padding: 10px 24px; font-weight: 700; border-radius: 8px">
-                  Order Now →
+                <a href="?product_id=<?=$p['id']?>" class="bp-btn bp-btn-primary" style="padding: 8px 16px; font-weight: 700; border-radius: 10px; font-size: 12.5px; flex-shrink: 0">
+                  Configure →
                 </a>
               </div>
             </div>
@@ -376,7 +404,7 @@ include 'partials/header.php';
         <?php endforeach; ?>
 
         <?php if (empty($products_to_show)): ?>
-          <div class="bp-card"><div class="bp-empty"><div class="bp-empty-icon">📦</div><div class="bp-empty-title">No products available in this category</div></div></div>
+          <div style="grid-column: 1 / -1;" class="bp-card"><div class="bp-empty"><div class="bp-empty-icon">📦</div><div class="bp-empty-title">No products available in this category</div></div></div>
         <?php endif; ?>
       </div>
     <?php endif; ?>
