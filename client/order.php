@@ -153,7 +153,15 @@ if (is_post() && post('action') === 'check_domain') {
         }
     }
     
-    json_response(['success' => true, 'available' => $available]);
+    $domain_price = 0;
+    require_once INC_PATH . '/modules/reseller.php';
+    $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
+    $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
+    if ($domain_pricing && isset($domain_pricing['register'])) {
+        $domain_price = convert_price($domain_pricing['register'], 'NGN', $currency);
+    }
+    
+    json_response(['success' => true, 'available' => $available, 'price' => $domain_price]);
 }
 
 // Place order
@@ -236,6 +244,9 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
         }
 
         if (!$error && $client) {
+            $domain_price = 0;
+            $add_domain_service = false;
+
             if ($prod['type'] === 'domain') {
                 require_once INC_PATH . '/modules/reseller.php';
                 $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
@@ -252,12 +263,24 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                 }
                 $prod_cur = $prod['currency'] ?: 'NGN';
                 $price = convert_price($price, $prod_cur, $currency);
+
+                // If they are registering a new domain with this product
+                if ($domain_opt === 'register' && !empty($domain)) {
+                    require_once INC_PATH . '/modules/reseller.php';
+                    $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
+                    $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
+                    if ($domain_pricing && isset($domain_pricing['register'])) {
+                        $domain_price = convert_price($domain_pricing['register'], 'NGN', $currency);
+                        $add_domain_service = true;
+                    }
+                }
             }
             if(!$price) { $error='Selected pricing or domain registration not available.'; }
             else {
+                $subtotal = $price + $domain_price;
                 $tax_enabled=DB::setting('tax_enabled','1')==='1';
                 $tax_rate=$tax_enabled?(float)DB::setting('tax_rate',0):0;
-                $tax_amt=round($price*($tax_rate/100),2);
+                $tax_amt=round($subtotal*($tax_rate/100),2);
                 $discount=0; $coupon_id=null;
 
                 if($coupon_code){
@@ -267,7 +290,7 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                 }
 
                 if(!$error){
-                    $total=max(0,$price+$tax_amt-$discount);
+                    $total=max(0,$subtotal+$tax_amt-$discount);
                     if($pay_method==='credit'&&(float)$client['credit_balance']<$total){
                         $error='Insufficient credit balance. Please add funds first.';
                     } else {
@@ -288,12 +311,30 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                         DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),'pending')",'iiiisssds',[$client['id'],$order_id,$pid2,$reseller_id,$domain,$cyc,$price,$next_due]);
                         $svc_id=DB::lastInsertId();
 
+                        $invoice_items = [
+                            ['description'=>$prod['name'].' ('.ucfirst(str_replace('_',' ',$cyc)).')','unit_price'=>$price,'quantity'=>1,'service_id'=>$svc_id]
+                        ];
+
+                        if ($add_domain_service) {
+                            $domain_prod_id = (int)DB::value("SELECT id FROM products WHERE type='domain' AND visible=1 LIMIT 1");
+                            $dom_next_due = date('Y-m-d', strtotime('+1 year'));
+                            DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),'pending')",'iiiisssds',[$client['id'],$order_id,$domain_prod_id ?: null,$reseller_id,$domain,'annually',$domain_price,$dom_next_due]);
+                            $dom_svc_id = DB::lastInsertId();
+
+                            $invoice_items[] = [
+                                'description' => "Domain Registration - {$domain} (1 Year)",
+                                'unit_price' => $domain_price,
+                                'quantity' => 1,
+                                'service_id' => $dom_svc_id
+                            ];
+                        }
+
                         $inv_id=Billing::createInvoice([
                             'client_id'       =>$client['id'],
                             'order_id'        =>$order_id,
                             'currency'        =>$currency,
                             'discount_amount' =>$discount,
-                            'items'           =>[['description'=>$prod['name'].' ('.ucfirst(str_replace('_',' ',$cyc)).')','unit_price'=>$price,'quantity'=>1,'service_id'=>$svc_id]],
+                            'items'           =>$invoice_items,
                         ]);
 
                         if($coupon_id) Billing::applyCoupon($coupon_id);
@@ -759,6 +800,7 @@ include 'partials/header.php';
       }
       ?>
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px"><span style="color:#64748b"><?=h($product['name'])?></span><span id="sum-price" style="font-weight:600"><?=format_currency($first_pr,$currency)?></span></div>
+      <div id="sum-domain-row" style="display:none;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px"><span style="color:#64748b" id="sum-domain-desc">Domain Registration</span><span id="sum-domain-price" style="font-weight:600"></span></div>
       <?php if($tax_rate_display>0):?>
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px"><span style="color:#64748b"><?=h(DB::setting('tax_name','VAT'))?> (<?=$tax_rate_display?>%)</span><span id="sum-tax" style="font-weight:600"><?=format_currency(round($first_pr*($tax_rate_display/100),2),$currency)?></span></div>
       <?php endif?>
@@ -782,10 +824,13 @@ function fmt(n){
     return sym+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 }
 
+let domainPrice = 0;
+
 function updateSummary(price){
     curPrice=price;
-    const tax=Math.round(price*taxRate*100)/100;
-    const total=Math.max(0,price+tax-discountAmt);
+    const subtotal = price + domainPrice;
+    const tax=Math.round(subtotal*taxRate*100)/100;
+    const total=Math.max(0,subtotal+tax-discountAmt);
     document.getElementById('sum-price').textContent=fmt(price);
     const st=document.getElementById('sum-tax');if(st)st.textContent=fmt(tax);
     document.getElementById('sum-total').textContent=fmt(total);
@@ -875,6 +920,12 @@ function switchDomainTab(type) {
         regSection.style.display = 'none';
         existingSection.style.display = 'block';
         domainOption.value = 'existing';
+        
+        // Clear domain registration price from summary
+        domainPrice = 0;
+        const domRow = document.getElementById('sum-domain-row');
+        if (domRow) domRow.style.display = 'none';
+        updateSummary(curPrice);
     }
 }
 
@@ -907,11 +958,29 @@ async function checkDomainAvailability() {
             if (d.available) {
                 domainChecked = true;
                 domainAvailable = true;
-                feedback.innerHTML = '<span style="color:#10b981">✓ Premium Choice! ' + domain + ' is available!</span>';
+                domainPrice = parseFloat(d.price || 0);
+                feedback.innerHTML = '<span style="color:#10b981">✓ Premium Choice! ' + domain + ' is available! (+ ' + fmt(domainPrice) + '/yr)</span>';
+                
+                // Show in summary panel!
+                const domRow = document.getElementById('sum-domain-row');
+                if (domRow) {
+                    domRow.style.display = 'flex';
+                    const descEl = document.getElementById('sum-domain-desc');
+                    if (descEl) descEl.textContent = 'Domain: ' + domain + ' (1 Year)';
+                    const priceEl = document.getElementById('sum-domain-price');
+                    if (priceEl) priceEl.textContent = fmt(domainPrice);
+                }
+                updateSummary(curPrice);
             } else {
                 domainChecked = true;
                 domainAvailable = false;
+                domainPrice = 0;
                 feedback.innerHTML = '<span style="color:#ef4444">✕ Sorry, ' + domain + ' is already taken. Try another name.</span>';
+                
+                // Hide from summary panel
+                const domRow = document.getElementById('sum-domain-row');
+                if (domRow) domRow.style.display = 'none';
+                updateSummary(curPrice);
             }
         } else {
             feedback.innerHTML = '<span style="color:#ef4444">✕ ' + d.error + '</span>';
@@ -928,6 +997,10 @@ async function checkDomainAvailability() {
 document.getElementById('domain-search-input')?.addEventListener('input', () => {
     domainChecked = false;
     domainAvailable = false;
+    domainPrice = 0;
+    const domRow = document.getElementById('sum-domain-row');
+    if (domRow) domRow.style.display = 'none';
+    updateSummary(curPrice);
     const feedback = document.getElementById('domain-search-feedback');
     if (feedback) feedback.innerHTML = '';
 });
