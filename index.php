@@ -462,28 +462,32 @@ foreach ($products as $p) {
       width: max-content;
       margin-left: auto;
       margin-right: auto;
+      border: 1px solid rgba(15, 23, 42, 0.04);
     }
 
     .hp-tab-btn {
       border: none;
       background: none;
       padding: 10px 24px;
-      font-size: 13px;
+      font-size: 13.5px;
       font-weight: 700;
       border-radius: 50px;
       color: #64748b;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .hp-tab-btn.active {
       background: #fff;
-      color: var(--dark);
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+      color: var(--primary);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
     }
 
     .hp-tab-content {
       display: none;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .hp-tab-content.active {
@@ -499,19 +503,20 @@ foreach ($products as $p) {
 
     .hp-plan-card {
       background: #fff;
-      border: 1.5px solid var(--border);
-      border-radius: 20px;
+      border: 1px solid var(--border);
+      border-radius: 28px;
       padding: 36px;
       position: relative;
-      transition: all 0.3s ease;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
       flex-direction: column;
+      box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.02), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
     }
 
     .hp-plan-card:hover {
       border-color: var(--primary);
-      box-shadow: 0 16px 36px rgba(59, 130, 246, 0.05);
-      transform: translateY(-4px);
+      box-shadow: 0 20px 38px -4px rgba(59, 130, 246, 0.08), 0 8px 16px -2px rgba(59, 130, 246, 0.04);
+      transform: translateY(-6px);
     }
 
     .hp-plan-card.featured {
@@ -860,6 +865,26 @@ foreach ($products as $p) {
     }
 
     @media (max-width: 768px) {
+      .hp-tabs {
+        display: flex !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        max-width: 100% !important;
+        padding: 6px 12px !important;
+        border-radius: 16px !important;
+        justify-content: flex-start !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+      .hp-tabs::-webkit-scrollbar {
+        display: none !important;
+      }
+      .hp-tab-btn {
+        flex: 0 0 auto !important;
+        padding: 8px 18px !important;
+      }
       .hp-menu, .hp-nav-btns {
         display: none;
       }
@@ -1205,14 +1230,93 @@ foreach ($products as $p) {
       }
     }
 
-    function switchTab(tabId, btn) {
-      // Hide all tabs
-      document.querySelectorAll('.hp-tab-content').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.hp-tab-btn').forEach(el => el.classList.remove('active'));
+    let autoSwitchInterval = null;
+    let currentTabIdx = 0;
+    let tabs = [];
 
-      // Show active tab
-      document.getElementById(tabId).classList.add('active');
+    document.addEventListener("DOMContentLoaded", () => {
+      tabs = Array.from(document.querySelectorAll('.hp-tab-btn'));
+      
+      // Initialize styling for all inactive tab content panels to ensure smooth start states
+      document.querySelectorAll('.hp-tab-content').forEach((el, index) => {
+        if (index === 0) {
+          el.style.opacity = '1';
+          el.style.transform = 'translateY(0)';
+        } else {
+          el.style.opacity = '0';
+          el.style.transform = 'translateY(20px)';
+        }
+      });
+
+      startAutoSwitch();
+
+      // Attach hover pause handlers
+      const hostingSection = document.getElementById('hosting');
+      if (hostingSection) {
+        hostingSection.addEventListener('mouseenter', stopAutoSwitch);
+        hostingSection.addEventListener('mouseleave', startAutoSwitch);
+      }
+    });
+
+    function startAutoSwitch() {
+      if (tabs.length <= 1) return;
+      stopAutoSwitch(); // Prevent duplicate intervals
+      autoSwitchInterval = setInterval(() => {
+        currentTabIdx = (currentTabIdx + 1) % tabs.length;
+        const targetBtn = tabs[currentTabIdx];
+        const clickAttr = targetBtn.getAttribute('onclick');
+        const match = clickAttr ? clickAttr.match(/'([^']+)'/) : null;
+        const targetTabId = match ? match[1] : null;
+        if (targetTabId) {
+          switchTab(targetTabId, targetBtn, true);
+        }
+      }, 5000); // Switch every 5 seconds
+    }
+
+    function stopAutoSwitch() {
+      if (autoSwitchInterval) {
+        clearInterval(autoSwitchInterval);
+        autoSwitchInterval = null;
+      }
+    }
+
+    function switchTab(tabId, btn, fromAuto = false) {
+      if (!fromAuto) {
+        stopAutoSwitch();
+        startAutoSwitch();
+      }
+
+      // Update current index tracked
+      const newIdx = tabs.indexOf(btn);
+      if (newIdx !== -1) {
+        currentTabIdx = newIdx;
+      }
+
+      // Deactivate all buttons
+      document.querySelectorAll('.hp-tab-btn').forEach(el => el.classList.remove('active'));
+      
+      // Deactivate all content panels with smooth fade-out and slide-down
+      document.querySelectorAll('.hp-tab-content').forEach(el => {
+        el.classList.remove('active');
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(20px)';
+      });
+
+      // Activate selected button & content panel with high-fidelity slide-up
       btn.classList.add('active');
+      const activeContent = document.getElementById(tabId);
+      if (activeContent) {
+        activeContent.classList.add('active');
+        // Force rendering reflow to ensure CSS transitions execute seamlessly
+        activeContent.offsetHeight;
+        activeContent.style.opacity = '1';
+        activeContent.style.transform = 'translateY(0)';
+        
+        // Premium scroll-into-view helper on mobile screens for better surfing
+        if (window.innerWidth <= 768) {
+          btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }
     }
   </script>
 </body>
