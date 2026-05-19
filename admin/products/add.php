@@ -70,11 +70,17 @@ include '../partials/header.php';
       <div class="bp-form-group"><label class="bp-label">Provisioning Module</label>
         <select name="module" class="bp-select">
           <option value="">None (manual)</option>
-          <option value="cpanel" <?=post('module')==='cpanel'?'selected':''?>>cPanel/WHM</option>
-          <option value="nocix" <?=post('module')==='nocix'?'selected':''?>>NOCIX Dedicated</option>
-          <option value="time4vps" <?=post('module')==='time4vps'?'selected':''?>>Time4VPS</option>
-          <option value="resellerclub" <?=post('module')==='resellerclub'?'selected':''?>>ResellerClub Domains</option>
-          <option value="namecheap" <?=post('module')==='namecheap'?'selected':''?>>Namecheap Domains</option>
+          <?php foreach([
+            'cpanel'          => 'cPanel/WHM',
+            'resellerclub'    => 'ResellerClub Domains',
+            'namecheap'       => 'Namecheap Domains',
+            'connectreseller' => 'ConnectReseller Domains',
+            'upperlink'       => 'Upperlink Domains',
+            'nocix'           => 'NOCIX Dedicated',
+            'time4vps'        => 'Time4VPS'
+          ] as $m => $mname):?>
+            <option value="<?=$m?>" <?=post('module')===$m?'selected':''?>><?=h($mname)?></option>
+          <?php endforeach?>
         </select>
       </div>
       <div class="bp-form-group"><label class="bp-label">Reseller Discount (%)</label><input type="number" name="wholesale_discount" class="bp-input" step="0.1" min="0" max="100" value="<?=h(post('wholesale_discount','0'))?>"><div class="bp-input-hint">% discount given to resellers on this product.</div></div>

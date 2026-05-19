@@ -72,7 +72,20 @@ include '../partials/header.php';
   <div class="col-lg-4">
     <div class="bp-card"><div class="bp-card-header"><h3 class="bp-card-title">Settings</h3></div><div class="bp-card-body">
       <div class="bp-form-group"><label class="bp-label">Module</label>
-        <select name="module" class="bp-select"><option value="">None</option><?php foreach(['cpanel','nocix','time4vps','resellerclub','namecheap'] as $m):?><option value="<?=$m?>" <?=post('module')===$m?'selected':''?>><?=ucfirst($m)?></option><?php endforeach?></select>
+        <select name="module" class="bp-select">
+          <option value="">None</option>
+          <?php foreach([
+            'cpanel'          => 'cPanel/WHM',
+            'resellerclub'    => 'ResellerClub Domains',
+            'namecheap'       => 'Namecheap Domains',
+            'connectreseller' => 'ConnectReseller Domains',
+            'upperlink'       => 'Upperlink Domains',
+            'nocix'           => 'NOCIX Dedicated',
+            'time4vps'        => 'Time4VPS'
+          ] as $m => $mname):?>
+            <option value="<?=$m?>" <?=post('module')===$m?'selected':''?>><?=h($mname)?></option>
+          <?php endforeach?>
+        </select>
       </div>
       <div class="bp-form-group"><label class="bp-label">Wholesale Discount (%)</label><input type="number" name="wholesale_discount" class="bp-input" step="0.1" min="0" max="100" value="<?=h(post('wholesale_discount'))?>"></div>
       <div style="display:flex;flex-direction:column;gap:10px">
