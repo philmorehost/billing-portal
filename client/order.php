@@ -158,7 +158,8 @@ if (is_post() && post('action') === 'check_domain') {
     $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
     $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
     if ($domain_pricing && isset($domain_pricing['register'])) {
-        $domain_price = convert_price($domain_pricing['register'], 'NGN', $currency);
+        $base_cur = DB::setting('base_currency', 'NGN');
+        $domain_price = convert_price($domain_pricing['register'], $base_cur, $currency);
     }
     
     json_response(['success' => true, 'available' => $available, 'price' => $domain_price]);
@@ -252,7 +253,8 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                 $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
                 $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
                 $price = $domain_pricing['register'];
-                $price = convert_price($price, 'NGN', $currency);
+                $base_cur = DB::setting('base_currency', 'NGN');
+                $price = convert_price($price, $base_cur, $currency);
             } else {
                 $price_col='price_'.$cyc;
                 if (!empty($_SESSION['reseller_domain_id'])) {
@@ -261,7 +263,7 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                 } else {
                     $price=(float)($prod[$price_col]??0);
                 }
-                $prod_cur = $prod['currency'] ?: 'NGN';
+                $prod_cur = $prod['currency'] ?: DB::setting('base_currency', 'NGN');
                 $price = convert_price($price, $prod_cur, $currency);
 
                 // If they are registering a new domain with this product
@@ -270,7 +272,8 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                     $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
                     $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
                     if ($domain_pricing && isset($domain_pricing['register'])) {
-                        $domain_price = convert_price($domain_pricing['register'], 'NGN', $currency);
+                        $base_cur = DB::setting('base_currency', 'NGN');
+                        $domain_price = convert_price($domain_pricing['register'], $base_cur, $currency);
                         $add_domain_service = true;
                     }
                 }
@@ -514,12 +517,18 @@ include 'partials/header.php';
                 </tr>
               </thead>
               <tbody>
-                <?php foreach ($tld_matrix as $t): ?>
+                <?php 
+                $base_cur = DB::setting('base_currency', 'NGN');
+                foreach ($tld_matrix as $t): 
+                  $reg_conv = convert_price((float)$t['retail_price_register'], $base_cur, $currency);
+                  $renew_conv = convert_price((float)$t['retail_price_renew'], $base_cur, $currency);
+                  $transfer_conv = convert_price((float)$t['retail_price_transfer'], $base_cur, $currency);
+                ?>
                   <tr>
                     <td style="font-weight: 700; color: #2563eb; font-family: monospace; font-size: 15px">.<?=h($t['tld'])?></td>
-                    <td style="font-weight: 600; color: #0f172a"><?=format_currency($t['retail_price_register'], $currency)?></td>
-                    <td style="color: #475569"><?=format_currency($t['retail_price_renew'], $currency)?></td>
-                    <td style="color: #475569"><?=format_currency($t['retail_price_transfer'], $currency)?></td>
+                    <td style="font-weight: 600; color: #0f172a"><?=format_currency($reg_conv, $currency)?></td>
+                    <td style="color: #475569"><?=format_currency($renew_conv, $currency)?></td>
+                    <td style="color: #475569"><?=format_currency($transfer_conv, $currency)?></td>
                     <td style="text-align: right">
                       <a href="?product_id=<?=$domain_prod['id']?>&domain=mysite.<?=$t['tld']?>" class="bp-btn bp-btn-primary bp-btn-sm" style="padding: 4px 12px; font-size: 12px">Register</a>
                     </td>
@@ -591,7 +600,7 @@ include 'partials/header.php';
                       if ($p_monthly > 0) $p_monthly = Reseller::getRetailPrice((int)$p['id'], 'monthly', (int)$_SESSION['reseller_domain_id']);
                       if ($p_annually > 0) $p_annually = Reseller::getRetailPrice((int)$p['id'], 'annually', (int)$_SESSION['reseller_domain_id']);
                   }
-                  $prod_cur = $p['currency'] ?: 'NGN';
+                  $prod_cur = $p['currency'] ?: DB::setting('base_currency', 'NGN');
                   $p_monthly = convert_price($p_monthly, $prod_cur, $currency);
                   $p_annually = convert_price($p_annually, $prod_cur, $currency);
                   if ($p_monthly): 
@@ -651,7 +660,7 @@ include 'partials/header.php';
                   require_once INC_PATH . '/modules/reseller.php';
                   $pr = Reseller::getRetailPrice((int)$product['id'], $ck, (int)$_SESSION['reseller_domain_id']);
               }
-              $prod_cur = $product['currency'] ?: 'NGN';
+              $prod_cur = $product['currency'] ?: DB::setting('base_currency', 'NGN');
               $pr_conv = convert_price($pr, $prod_cur, $currency);
             ?>
             <label style="border:1.5px solid <?=$first_cycle?'#3b82f6':'#e2e8f0'?>;border-radius:10px;padding:12px;cursor:pointer;transition:all .2s;text-align:center" class="cycle-opt" data-price="<?=$pr_conv?>" data-cycle="<?=$ck?>">
@@ -779,7 +788,8 @@ include 'partials/header.php';
           $searched_domain = trim(get_param('domain', 'example.com'));
           $domain_pricing = Reseller::getDomainPricing($searched_domain, $reseller_id);
           $first_pr = $domain_pricing['register'];
-          $first_pr = convert_price($first_pr, 'NGN', $currency);
+          $base_cur = DB::setting('base_currency', 'NGN');
+          $first_pr = convert_price($first_pr, $base_cur, $currency);
           $first_ck = 'annually';
       } else {
           foreach (['monthly','quarterly','semi_annually','annually','biennially'] as $c) {
@@ -794,7 +804,7 @@ include 'partials/header.php';
               } else {
                   $first_pr = (float)($product['price_'.$first_ck]??0);
               }
-              $prod_cur = $product['currency'] ?: 'NGN';
+              $prod_cur = $product['currency'] ?: DB::setting('base_currency', 'NGN');
               $first_pr = convert_price($first_pr, $prod_cur, $currency);
           }
       }
