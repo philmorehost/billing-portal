@@ -50,15 +50,7 @@ if (!function_exists('get_client_country_by_ip')) {
 
 if (!function_exists('convert_price')) {
     function convert_price(float $amount, string $from_cur, string $to_cur): float {
-        if ($from_cur === $to_cur) return $amount;
-        $rate = (float) DB::setting('usd_exchange_rate', 1600);
-        if ($from_cur === 'NGN' && $to_cur === 'USD') {
-            return round($amount / $rate, 2);
-        }
-        if ($from_cur === 'USD' && $to_cur === 'NGN') {
-            return round($amount * $rate, 2);
-        }
-        return $amount;
+        return Billing::convertCurrency($amount, $from_cur, $to_cur);
     }
 }
 

@@ -157,14 +157,88 @@ class Billing {
 
     // ── Currency Conversion ────────────────────────────────────────────────
 
+    public static function getLiveRates(): array {
+        $cached_rates = DB::setting('live_rates_cache');
+        $last_updated = (int) DB::setting('live_rates_last_updated', 0);
+        $now = time();
+
+        // Cache rates for 6 hours (21600 seconds)
+        if ($cached_rates && ($now - $last_updated) < 21600) {
+            $rates = json_decode($cached_rates, true);
+            if (is_array($rates) && !empty($rates['NGN'])) {
+                return $rates;
+            }
+        }
+
+        // Fetch new rates
+        $ch = curl_init('https://open.er-api.com/v6/latest/USD');
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+        $resp = curl_exec($ch);
+        curl_close($ch);
+
+        if ($resp) {
+            $data = json_decode($resp, true);
+            if (!empty($data['rates']) && is_array($data['rates'])) {
+                $rates = $data['rates'];
+                // Save to DB
+                self::saveSetting('live_rates_cache', json_encode($rates));
+                self::saveSetting('live_rates_last_updated', (string)$now);
+                return $rates;
+            }
+        }
+
+        // Fallback rates if API is offline
+        if ($cached_rates) {
+            $rates = json_decode($cached_rates, true);
+            if (is_array($rates)) return $rates;
+        }
+
+        return ['USD' => 1.0, 'NGN' => 1600.0, 'EUR' => 0.92, 'GBP' => 0.79, 'GHS' => 14.5, 'KES' => 130.0, 'ZAR' => 18.5];
+    }
+
+    private static function saveSetting(string $key, string $value): void {
+        $exists = DB::value("SELECT COUNT(*) FROM settings WHERE setting_key=?", 's', [$key]);
+        if ($exists > 0) {
+            DB::execute("UPDATE settings SET setting_value=? WHERE setting_key=?", 'ss', [$value, $key]);
+        } else {
+            DB::execute("INSERT INTO settings (setting_key, setting_value, setting_group) VALUES (?, ?, 'billing')", 'ss', [$key, $value]);
+        }
+    }
+
+    public static function convertCurrency(float $amount, string $from_cur, string $to_cur): float {
+        if ($from_cur === $to_cur) return $amount;
+
+        $rates = self::getLiveRates();
+        $from_rate = (float)($rates[$from_cur] ?? 1.0);
+        $to_rate = (float)($rates[$to_cur] ?? 1.0);
+
+        $markup_percent = (float) DB::setting('usd_to_ngn_markup_percent', 0);
+        $ngn_markup_multiplier = 1.0 + ($markup_percent / 100);
+
+        if ($from_cur === 'USD' && $to_cur === 'NGN') {
+            $effective_rate = $to_rate * $ngn_markup_multiplier;
+            return round($amount * $effective_rate, 2);
+        }
+
+        if ($from_cur === 'NGN' && $to_cur === 'USD') {
+            $effective_rate = $from_rate * $ngn_markup_multiplier;
+            return round($amount / $effective_rate, 2);
+        }
+
+        // General conversion for other currencies
+        // First convert to USD
+        $amount_usd = $amount / $from_rate;
+        // Then convert to destination
+        return round($amount_usd * $to_rate, 2);
+    }
+
     public static function convertToUSD(float $ngn_amount): float {
-        $rate = (float) DB::setting('usd_exchange_rate', 1600);
-        return round($ngn_amount / $rate, 2);
+        return self::convertCurrency($ngn_amount, 'NGN', 'USD');
     }
 
     public static function convertFromUSD(float $usd_amount): float {
-        $rate = (float) DB::setting('usd_exchange_rate', 1600);
-        return round($usd_amount * $rate, 2);
+        return self::convertCurrency($usd_amount, 'USD', 'NGN');
     }
 
     // ── Coupon Validation ──────────────────────────────────────────────────
@@ -280,15 +354,10 @@ class Billing {
         $apiKey = DB::setting('crypto_plisio_api_key');
         if (!$apiKey) return ['success' => false, 'error' => 'Plisio API is not configured. Please contact the administrator.'];
 
-        $currency = $inv['currency'] ?? 'NGN';
+        $currency = $inv['currency'] ?? 'USD';
         $amount = (float)$inv['total'];
-        if ($currency !== 'USD') {
-            $source_amount = self::convertToUSD($amount);
-            $source_currency = 'USD';
-        } else {
-            $source_amount = $amount;
-            $source_currency = 'USD';
-        }
+        $source_amount = self::convertCurrency($amount, $currency, 'USD');
+        $source_currency = 'USD';
 
         $allowed_coins = DB::setting('crypto_plisio_allowed_coins', 'BTC,LTC,USDT,ETH');
         $ref = 'INV-' . $inv['invoice_number'] . '-' . time();

@@ -103,7 +103,11 @@ include 'partials/header.php';
               <?php endforeach ?>
             </select>
           </div>
-          <div class="bp-form-group"><label class="bp-label">USD Exchange Rate (per USD)</label><input type="number" step="0.01" name="usd_exchange_rate" class="bp-input" value="<?= h($s('usd_exchange_rate','1600')) ?>"><div class="bp-input-hint">Used for NGN→USD conversion at checkout.</div></div>
+          <div class="bp-form-group">
+            <label class="bp-label">USD to NGN Markup Charge (%)</label>
+            <input type="number" step="0.01" name="usd_to_ngn_markup_percent" class="bp-input" value="<?= h($s('usd_to_ngn_markup_percent','0')) ?>">
+            <div class="bp-input-hint">Additional markup charge over live rate for NGN conversion only.</div>
+          </div>
           <div class="bp-form-group"><label class="bp-label">Invoice Prefix</label><input type="text" name="invoice_prefix" class="bp-input" value="<?= h($s('invoice_prefix','INV')) ?>"></div>
           <div class="bp-form-group"><label class="bp-label">Invoice Due Days</label><input type="number" name="invoice_due_days" class="bp-input" value="<?= h($s('invoice_due_days','7')) ?>"></div>
           <div class="bp-form-group"><label class="bp-label">Tax Name</label><input type="text" name="tax_name" class="bp-input" value="<?= h($s('tax_name','VAT')) ?>"></div>

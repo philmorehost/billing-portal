@@ -41,9 +41,54 @@ if(is_post()&&csrf_verify()){
     }
 }
 $inv=DB::row("SELECT i.*,c.first_name,c.last_name,c.email,c.company AS cc,c.address1 FROM invoices i JOIN clients c ON c.id=i.client_id WHERE i.id=? AND i.client_id=?",'ii',[$inv_id,$client['id']]);
+$country = 'US';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+if (isset($_SESSION['client_country_code'])) {
+    $country = $_SESSION['client_country_code'];
+} else {
+    if (!function_exists('get_client_ip')) {
+        function get_client_ip(): string {
+            foreach (['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'] as $key) {
+                if (!empty($_SERVER[$key])) {
+                    $ips = explode(',', $_SERVER[$key]);
+                    $ip = trim($ips[0]);
+                    if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                        return $ip;
+                    }
+                }
+            }
+            return '127.0.0.1';
+        }
+    }
+    $ip = get_client_ip();
+    if ($ip === '127.0.0.1' || $ip === '::1') {
+        $country = 'NG';
+    } else {
+        $ch = curl_init("http://ip-api.com/json/" . urlencode($ip));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+        $resp = curl_exec($ch);
+        curl_close($ch);
+        if ($resp) {
+            $data = json_decode($resp, true);
+            if (!empty($data['countryCode'])) {
+                $country = strtoupper($data['countryCode']);
+            }
+        }
+    }
+    $_SESSION['client_country_code'] = $country;
+}
+
 $ps_on=DB::setting('paystack_enabled')==='1';
 $bt_on=DB::setting('bank_transfer_enabled')==='1';
 $cr_on=DB::setting('crypto_enabled')==='1';
+
+if ($country !== 'NG') {
+    $ps_on = false;
+    $bt_on = false;
+}
 $credit=(float)$client['credit_balance'];
 $can_credit=$credit>=$inv['total'];
 $can_pay=in_array($inv['status'],['unpaid','overdue']);
