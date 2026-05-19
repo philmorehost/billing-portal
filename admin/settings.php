@@ -75,6 +75,16 @@ include 'partials/header.php';
         </div>
         <div class="bp-form-group"><label class="bp-label">Company Address</label><textarea name="company_address" class="bp-textarea" rows="3"><?= h($s('company_address')) ?></textarea></div>
         <div class="bp-form-group">
+          <label class="bp-label">Default Order Category</label>
+          <select name="default_product_group" class="bp-select">
+            <option value="" <?= $s('default_product_group')===''?'selected':'' ?>>Default (First Category with visible products)</option>
+            <?php foreach (DB::rows("SELECT * FROM product_groups WHERE visible=1 ORDER BY sort_order, name") as $pg_opt): ?>
+              <option value="<?= $pg_opt['id'] ?>" <?= $s('default_product_group')==$pg_opt['id']?'selected':'' ?>><?= h($pg_opt['name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <div class="bp-input-hint">Select the category that will show its products by default when a client opens the order page.</div>
+        </div>
+        <div class="bp-form-group">
           <label class="bp-label">Maintenance Mode</label>
           <select name="maintenance_mode" class="bp-select">
             <option value="0" <?= $s('maintenance_mode')==='0'?'selected':'' ?>>Disabled</option>

@@ -162,7 +162,23 @@ $selected_group_id = get_param('group') !== null ? (get_param('group') === 'all'
 
 $is_domain_view = (isset($_GET['type']) && $_GET['type'] === 'domain');
 if ($selected_group_id === null && !$is_domain_view && !empty($store_groups) && !get_param('product_id')) {
-    $selected_group_id = (int)$store_groups[0]['id'];
+    $default_config = (int)DB::setting('default_product_group');
+    if ($default_config > 0) {
+        $selected_group_id = $default_config;
+    } else {
+        // Automatically default to the first group that actually has visible products in it
+        $first_populated = (int)DB::value(
+            "SELECT pg.id FROM product_groups pg 
+             JOIN products p ON p.group_id = pg.id 
+             WHERE pg.visible = 1 AND p.visible = 1 
+             ORDER BY pg.sort_order, pg.name LIMIT 1"
+        );
+        if ($first_populated > 0) {
+            $selected_group_id = $first_populated;
+        } else {
+            $selected_group_id = (int)$store_groups[0]['id'];
+        }
+    }
 }
 
 $all_products=DB::rows("SELECT p.*,pg.name AS group_name FROM products p LEFT JOIN product_groups pg ON pg.id=p.group_id WHERE p.visible=1 ORDER BY pg.sort_order,p.sort_order,p.name");
