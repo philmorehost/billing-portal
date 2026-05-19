@@ -141,7 +141,7 @@ include 'partials/header.php';
   <div class="bp-empty-icon">🌐</div>
   <div class="bp-empty-title">No domains yet</div>
   <div class="bp-empty-text">Register your first domain to get started.</div>
-  <a href="order.php" class="bp-btn bp-btn-primary bp-btn-sm" style="margin-top:12px">Register a Domain</a>
+  <a href="order.php?type=domain" class="bp-btn bp-btn-primary bp-btn-sm" style="margin-top:12px">Register a Domain</a>
 </div></div>
 <?php endif?>
 </div>
