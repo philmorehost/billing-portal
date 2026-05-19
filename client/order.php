@@ -4,6 +4,8 @@ require_once INC_PATH.'/modules/billing.php';
 $client=Auth::client();
 $company=DB::setting('company_name','Billing Portal');
 $currency=DB::setting('base_currency','NGN');
+// Self-heal corrupted product currencies from previous edit/duplicate database specifier bugs
+DB::execute("UPDATE products SET currency = ? WHERE currency = '0' OR currency = '' OR currency IS NULL", 's', [$currency]);
 $page_title='Order';
 $error='';
 

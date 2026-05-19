@@ -21,7 +21,7 @@ if(is_post()&&csrf_verify()&&post('action')==='duplicate'){
         
         DB::execute(
             "INSERT INTO products (group_id, name, slug, description, type, price_monthly, price_quarterly, price_semi_annually, price_annually, price_biennially, setup_fee, currency, wholesale_discount, module, tax_enabled, auto_provision, visible, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            'isssdddddddsdisiii',
+            'issssddddddsdsiiii',
             [
                 $p['group_id'], $newName, $newSlug, $p['description'], $p['type'],
                 $p['price_monthly'], $p['price_quarterly'], $p['price_semi_annually'],

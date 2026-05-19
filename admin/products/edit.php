@@ -18,7 +18,7 @@ if(is_post()&&csrf_verify()){
     
     if(empty($errors)){
         DB::execute("UPDATE products SET group_id=?,name=?,slug=?,description=?,type=?,price_monthly=?,price_quarterly=?,price_semi_annually=?,price_annually=?,price_biennially=?,setup_fee=?,currency=?,wholesale_discount=?,module=?,tax_enabled=?,auto_provision=?,visible=? WHERE id=?",
-            'isssssddddddsdsiii',[
+            'issssddddddsdsiiii',[
                 $gid?:null,post('name'),$slug,post('description'),post('type'),
                 (float)post('price_monthly')?:null,(float)post('price_quarterly')?:null,(float)post('price_semi_annually')?:null,
                 (float)post('price_annually')?:null,(float)post('price_biennially')?:null,(float)post('setup_fee',0),
