@@ -42,7 +42,10 @@ include 'partials/header.php';
 <div class="bp-content">
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div><h1 class="bp-page-title" style="margin:0">Products & Services</h1><p class="bp-page-sub" style="margin:4px 0 0"><?=count($products)?> products</p></div>
-  <a href="products/add.php" class="bp-btn bp-btn-primary">➕ Add Product</a>
+  <div class="d-flex gap-2">
+    <a href="product-groups.php" class="bp-btn bp-btn-outline" style="border-color:#cbd5e1; color:#475569">📁 Manage Groups</a>
+    <a href="products/add.php" class="bp-btn bp-btn-primary">➕ Add Product</a>
+  </div>
 </div>
 <?=flash_html()?>
 <div class="bp-card">
