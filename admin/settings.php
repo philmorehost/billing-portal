@@ -238,7 +238,10 @@ include 'partials/header.php';
 
         <!-- Upperlink .NG -->
         <h5 style="font-weight:700;margin-bottom:16px;color:#0f172a">🔌 Upperlink (.NG Domains)</h5>
-        <div class="bp-form-group"><label class="bp-label">API Key</label><input type="password" name="module_upperlink_api_key" class="bp-input" placeholder="Leave blank to keep existing"></div>
+        <div class="bp-form-row bp-form-row-2">
+          <div class="bp-form-group"><label class="bp-label">Reseller Email (Username)</label><input type="text" name="module_upperlink_username" class="bp-input" value="<?=h($s('module_upperlink_username'))?>" placeholder="e.g. email@example.com"></div>
+          <div class="bp-form-group"><label class="bp-label">API Key</label><input type="password" name="module_upperlink_api_key" class="bp-input" placeholder="Leave blank to keep existing"></div>
+        </div>
         <hr style="margin:24px 0;border-color:#f1f5f9">
 
         <!-- NOCIX -->

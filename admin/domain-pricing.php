@@ -93,7 +93,7 @@ if(is_post() && post('action') === 'sync_tlds' && csrf_verify()) {
 
                         DB::execute(
                             "INSERT INTO domain_tlds (tld, registrar, base_price_register, base_price_renew, base_price_transfer, markup_type, markup_value, retail_price_register, retail_price_renew, retail_price_transfer, status) VALUES (?, 'connectreseller', ?,?,?, 'percentage', ?,?,?,?, 'active')",
-                            'sdddddddd', [$tld, $base_reg, $base_ren, $base_tr, $val, $retail_reg, $retail_ren, $retail_tr]
+                            'sddddddd', [$tld, $base_reg, $base_ren, $base_tr, $val, $retail_reg, $retail_ren, $retail_tr]
                         );
                     }
                     $synced++;
@@ -174,7 +174,7 @@ if(is_post() && post('action') === 'sync_resellerclub' && csrf_verify()) {
                         
                         DB::execute(
                             "INSERT INTO domain_tlds (tld, registrar, base_price_register, base_price_renew, base_price_transfer, markup_type, markup_value, retail_price_register, retail_price_renew, retail_price_transfer, status) VALUES (?, 'resellerclub', ?,?,?, 'percentage', ?,?,?,?, 'active')",
-                            'sdddddddd', [$tld, $base_reg, $base_ren, $base_tr, $val, $retail_reg, $retail_ren, $retail_tr]
+                            'sddddddd', [$tld, $base_reg, $base_ren, $base_tr, $val, $retail_reg, $retail_ren, $retail_tr]
                         );
                     }
                     $synced++;
@@ -299,7 +299,7 @@ if(is_post() && post('action') === 'sync_upperlink' && csrf_verify()) {
                         
                         DB::execute(
                             "INSERT INTO domain_tlds (tld, registrar, base_price_register, base_price_renew, base_price_transfer, markup_type, markup_value, retail_price_register, retail_price_renew, retail_price_transfer, status) VALUES (?, 'upperlink', ?,?,?, 'percentage', ?,?,?,?, 'active')",
-                            'sdddddddd', [$tld, $base_reg, $base_ren, $base_tr, $val, $retail_reg, $retail_ren, $retail_tr]
+                            'sddddddd', [$tld, $base_reg, $base_ren, $base_tr, $val, $retail_reg, $retail_ren, $retail_tr]
                         );
                     }
                     $synced++;
@@ -397,6 +397,61 @@ if(is_post() && post('action') === 'delete_tld' && csrf_verify()) {
     $success = "Domain extension deleted successfully.";
 }
 
+// 6b. Duplicate TLD Extension
+if(is_post() && post('action') === 'duplicate_tld' && csrf_verify()) {
+    $new_tld = strtolower(trim(post('new_tld')));
+    $new_tld = ltrim($new_tld, '.');
+    
+    if (empty($new_tld)) {
+        $error = "New domain extension name cannot be empty.";
+    } else {
+        $existing = DB::row("SELECT id FROM domain_tlds WHERE tld=?", 's', [$new_tld]);
+        if ($existing) {
+            $error = "The extension .{$new_tld} already exists.";
+        } else {
+            $source_id = (int)post('source_tld_id');
+            $source = DB::row("SELECT * FROM domain_tlds WHERE id=?", 'i', [$source_id]);
+            
+            if (!$source) {
+                $error = "Source TLD not found.";
+            } else {
+                $registrar = $source['registrar'];
+                $dns = (int)$source['dns_management'];
+                $email = (int)$source['email_forwarding'];
+                $id_prot = (int)$source['id_protection'];
+                $epp = (int)$source['epp_code'];
+                
+                $base_reg = (float)post('base_price_register');
+                $base_ren = (float)post('base_price_renew');
+                $base_tr  = (float)post('base_price_transfer');
+                
+                $markup_type = post('markup_type') === 'fixed' ? 'fixed' : 'percentage';
+                $markup_val = (float)post('markup_value');
+                
+                $retail_reg = (float)post('retail_price_register');
+                $retail_ren = (float)post('retail_price_renew');
+                $retail_tr  = (float)post('retail_price_transfer');
+                
+                if ($retail_reg <= 0) {
+                    $retail_reg = ($markup_type === 'percentage') ? round($base_reg * (1 + $markup_val / 100), 2) : round($base_reg + $markup_val, 2);
+                }
+                if ($retail_ren <= 0) {
+                    $retail_ren = ($markup_type === 'percentage') ? round($base_ren * (1 + $markup_val / 100), 2) : round($base_ren + $markup_val, 2);
+                }
+                if ($retail_tr <= 0) {
+                    $retail_tr = ($markup_type === 'percentage') ? round($base_tr * (1 + $markup_val / 100), 2) : round($base_tr + $markup_val, 2);
+                }
+                
+                DB::execute(
+                    "INSERT INTO domain_tlds (tld, registrar, base_price_register, base_price_renew, base_price_transfer, markup_type, markup_value, retail_price_register, retail_price_renew, retail_price_transfer, dns_management, email_forwarding, id_protection, epp_code, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'active')",
+                    'ssdddsddddiiii', [$new_tld, $registrar, $base_reg, $base_ren, $base_tr, $markup_type, $markup_val, $retail_reg, $retail_ren, $retail_tr, $dns, $email, $id_prot, $epp]
+                );
+                $success = "Successfully duplicated .{$source['tld']} to .{$new_tld} with custom pricing!";
+            }
+        }
+    }
+}
+
 // 7. Bulk Apply Markup Action
 if(is_post() && post('action') === 'bulk_markup' && csrf_verify()) {
     $markup_val = (float)post('bulk_markup_value');
@@ -483,7 +538,7 @@ include 'partials/header.php';
                 <tr>
                   <th style="width:50px">Active</th>
                   <th>TLD</th>
-                  <th style="width:110px;text-align:center">Pricing</th>
+                  <th style="width:200px;text-align:center">Pricing & Actions</th>
                   <th style="text-align:center">DNS Management</th>
                   <th style="text-align:center">Email Forwarding</th>
                   <th style="text-align:center">ID Protection</th>
@@ -507,9 +562,14 @@ include 'partials/header.php';
                     </td>
                     <td style="font-weight:700;color:#0f172a;font-family:monospace;font-size:16px">.<?=h($t['tld'])?></td>
                     <td style="text-align:center">
-                      <button type="button" class="bp-btn bp-btn-outline bp-btn-sm" style="font-size:11px;padding:4px 10px;border-radius:4px" onclick='openPricingModal(<?=json_encode($t, JSON_HEX_APOS | JSON_HEX_QUOT)?>)'>
-                        💲 Pricing
-                      </button>
+                      <div style="display:flex;gap:4px;justify-content:center">
+                        <button type="button" class="bp-btn bp-btn-outline bp-btn-sm" style="font-size:11px;padding:4px 8px;border-radius:4px" onclick='openPricingModal(<?=json_encode($t, JSON_HEX_APOS | JSON_HEX_QUOT)?>)'>
+                          💲 Pricing
+                        </button>
+                        <button type="button" class="bp-btn bp-btn-outline bp-btn-sm" style="font-size:11px;padding:4px 8px;border-radius:4px;color:#8b5cf6;border-color:rgba(139,92,246,0.3)" onclick='openDuplicateModal(<?=json_encode($t, JSON_HEX_APOS | JSON_HEX_QUOT)?>)'>
+                          📋 Duplicate
+                        </button>
+                      </div>
                     </td>
                     <td style="text-align:center">
                       <input type="checkbox" name="tlds[<?=$t['id']?>][dns_management]" value="1" <?=$t['dns_management']?'checked':''?> style="transform:scale(1.2);cursor:pointer">
@@ -740,6 +800,101 @@ include 'partials/header.php';
   </div>
 </div>
 
+<!-- Duplicate Modal Dialog -->
+<div id="duplicate-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.4);backdrop-filter:blur(3px);z-index:999;align-items:center;justify-content:center">
+  <div class="bp-card" style="width:520px;max-width:95%">
+    <div class="bp-card-header">
+      <h3 class="bp-card-title">👯 Duplicate TLD: <span id="duplicate-tld-label" style="font-family:monospace;color:#8b5cf6">.com</span></h3>
+      <button type="button" class="bp-btn bp-btn-outline bp-btn-sm" onclick="closeDuplicateModal()">✕</button>
+    </div>
+    <div class="bp-card-body" style="max-height:80vh;overflow-y:auto">
+      <form method="POST">
+        <?=csrf_input()?>
+        <input type="hidden" name="action" value="duplicate_tld">
+        <input type="hidden" name="source_tld_id" id="duplicate-source-id">
+
+        <div class="bp-form-group" style="background:#f1f5f9;padding:12px;border-radius:8px;margin-bottom:16px">
+          <label class="bp-label" style="color:#0f172a;font-weight:700">New TLD Extension Name</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;font-size:16px;color:#64748b">.</span>
+            <input type="text" name="new_tld" id="dup-new-tld" class="bp-input" style="font-family:monospace;font-size:16px" placeholder="e.g. net or com.ng" required>
+          </div>
+          <div class="bp-input-hint">Enter the new TLD extension name without a leading dot.</div>
+        </div>
+
+        <div style="font-weight:700;font-size:12px;text-transform:uppercase;color:#64748b;margin-bottom:12px;border-bottom:1px solid #e2e8f0;padding-bottom:6px">💰 Wholesale Cost Prices (USD)</div>
+        <div class="row">
+          <div class="col-md-4">
+            <div class="bp-form-group">
+              <label class="bp-label">Register Cost ($)</label>
+              <input type="number" name="base_price_register" id="d-base-reg" class="bp-input" step="0.01" required>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="bp-form-group">
+              <label class="bp-label">Renew Cost ($)</label>
+              <input type="number" name="base_price_renew" id="d-base-ren" class="bp-input" step="0.01" required>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="bp-form-group">
+              <label class="bp-label">Transfer Cost ($)</label>
+              <input type="number" name="base_price_transfer" id="d-base-tr" class="bp-input" step="0.01" required>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-weight:700;font-size:12px;text-transform:uppercase;color:#64748b;margin-bottom:12px;border-bottom:1px solid #e2e8f0;padding-bottom:6px">📈 Profit Rules & Markups</div>
+        <div class="row">
+          <div class="col-md-6">
+            <div class="bp-form-group">
+              <label class="bp-label">Markup Type</label>
+              <select name="markup_type" id="d-markup-type" class="bp-select">
+                <option value="percentage">Percentage (%)</option>
+                <option value="fixed">Fixed flat margin (<?=h($currency)?>)</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="bp-form-group">
+              <label class="bp-label">Profit Markup Value</label>
+              <input type="number" name="markup_value" id="d-markup-val" class="bp-input" step="0.01" required>
+            </div>
+          </div>
+        </div>
+
+        <div style="font-weight:700;font-size:12px;text-transform:uppercase;color:#64748b;margin-bottom:12px;border-bottom:1px solid #e2e8f0;padding-bottom:6px">🏷 Retail Selling Prices (<?=h($currency)?>)</div>
+        <div class="row">
+          <div class="col-md-4">
+            <div class="bp-form-group">
+              <label class="bp-label">Register Price</label>
+              <input type="number" name="retail_price_register" id="d-retail-reg" class="bp-input" step="0.01" required>
+              <div class="bp-input-hint">Enter 0 to auto-compute</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="bp-form-group">
+              <label class="bp-label">Renewal Price</label>
+              <input type="number" name="retail_price_renew" id="d-retail-ren" class="bp-input" step="0.01" required>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="bp-form-group">
+              <label class="bp-label">Transfer Price</label>
+              <input type="number" name="retail_price_transfer" id="d-retail-tr" class="bp-input" step="0.01" required>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:24px">
+          <button type="button" class="bp-btn bp-btn-outline" onclick="closeDuplicateModal()">Cancel</button>
+          <button type="submit" class="bp-btn bp-btn-primary" style="background:#8b5cf6;border-color:#8b5cf6">Clone & Save TLD</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
 function submitAddInline() {
     var tld = document.getElementById('add-tld-name').value.trim();
@@ -785,6 +940,29 @@ function openPricingModal(t) {
 
 function closePricingModal() {
     document.getElementById('pricing-modal').style.display = 'none';
+}
+
+function openDuplicateModal(t) {
+    document.getElementById('duplicate-source-id').value = t.id;
+    document.getElementById('duplicate-tld-label').textContent = '.' + t.tld;
+    document.getElementById('dup-new-tld').value = '';
+    
+    document.getElementById('d-base-reg').value = t.base_price_register;
+    document.getElementById('d-base-ren').value = t.base_price_renew;
+    document.getElementById('d-base-tr').value = t.base_price_transfer;
+    
+    document.getElementById('d-markup-type').value = t.markup_type || 'percentage';
+    document.getElementById('d-markup-val').value = t.markup_value || '20.00';
+    
+    document.getElementById('d-retail-reg').value = t.retail_price_register;
+    document.getElementById('d-retail-ren').value = t.retail_price_renew;
+    document.getElementById('d-retail-tr').value = t.retail_price_transfer;
+    
+    document.getElementById('duplicate-modal').style.display = 'flex';
+}
+
+function closeDuplicateModal() {
+    document.getElementById('duplicate-modal').style.display = 'none';
 }
 </script>
 <?php include 'partials/footer.php'; ?>
