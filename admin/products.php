@@ -30,7 +30,7 @@ if(is_post()&&csrf_verify()&&post('action')==='duplicate'){
                 $p['tax_enabled'], $p['auto_provision'], $p['visible'], $p['sort_order']
             ]
         );
-        $newId = DB::insertId();
+        $newId = DB::lastInsertId();
         redirect_with_flash("products/edit.php?id={$newId}", 'success', 'Product duplicated successfully! You can now edit the duplicate.');
     }
 }
