@@ -157,50 +157,215 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
     }
 }
 
+$store_groups = DB::rows("SELECT * FROM product_groups WHERE visible=1 ORDER BY sort_order, name");
+$selected_group_id = get_param('group') !== null ? (get_param('group') === 'all' ? 'all' : (int)get_param('group')) : null;
+
+$is_domain_view = (isset($_GET['type']) && $_GET['type'] === 'domain');
+if ($selected_group_id === null && !$is_domain_view && !empty($store_groups) && !get_param('product_id')) {
+    $selected_group_id = (int)$store_groups[0]['id'];
+}
+
 $all_products=DB::rows("SELECT p.*,pg.name AS group_name FROM products p LEFT JOIN product_groups pg ON pg.id=p.group_id WHERE p.visible=1 ORDER BY pg.sort_order,p.sort_order,p.name");
+
+if ($selected_group_id === 'all') {
+    $products_to_show = $all_products;
+} elseif ($selected_group_id !== null) {
+    $products_to_show = DB::rows("SELECT p.*, pg.name AS group_name FROM products p LEFT JOIN product_groups pg ON pg.id=p.group_id WHERE p.visible=1 AND p.group_id=? ORDER BY p.sort_order, p.name", 'i', [$selected_group_id]);
+} else {
+    $products_to_show = [];
+}
+
 $cycles=['monthly'=>'Monthly','quarterly'=>'Quarterly','semi_annually'=>'Semi-Annual','annually'=>'Annual','biennially'=>'Biennial'];
 $tax_rate_display=DB::setting('tax_enabled','1')==='1'?(float)DB::setting('tax_rate',0):0;
 include 'partials/header.php';
 ?>
 <div class="bp-content">
-<h1 class="bp-page-title">Order a Service</h1>
+<h1 class="bp-page-title" style="margin-bottom: 24px">🛒 Services Order Form</h1>
 <?php if($error):?><div class="alert-custom alert-danger mb-3"><span>✕</span> <?=h($error)?></div><?php endif?>
 
-<?php if(!$product): ?>
-<?php
-$last_grp='';
-foreach($all_products as $p):
-  if(!$p['price_monthly']&&!$p['price_annually'])continue;
-  if($p['group_name']!==$last_grp):$last_grp=$p['group_name'];?>
-  <h2 style="font-size:16px;font-weight:700;color:#0f172a;margin:24px 0 12px"><?=h($p['group_name']??'Products')?></h2>
-  <?php endif?>
-<div class="bp-card" style="margin-bottom:12px">
-  <div class="bp-card-body" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-    <div>
-      <div style="font-size:16px;font-weight:700"><?=h($p['name'])?></div>
-      <?php if($p['description']):?><div style="font-size:13px;color:#64748b;margin-top:3px"><?=h($p['description'])?></div><?php endif?>
-      <span class="bp-badge bp-badge-info" style="margin-top:6px;text-transform:capitalize"><?=$p['type']?></span>
-    </div>
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-      <div style="text-align:right">
-        <?php 
-        $p_monthly = (float)($p['price_monthly'] ?? 0);
-        $p_annually = (float)($p['price_annually'] ?? 0);
-        if (!empty($_SESSION['reseller_domain_id'])) {
-            require_once INC_PATH . '/modules/reseller.php';
-            if ($p_monthly > 0) $p_monthly = Reseller::getRetailPrice((int)$p['id'], 'monthly', (int)$_SESSION['reseller_domain_id']);
-            if ($p_annually > 0) $p_annually = Reseller::getRetailPrice((int)$p['id'], 'annually', (int)$_SESSION['reseller_domain_id']);
-        }
-        if($p_monthly):?><div style="font-size:22px;font-weight:900;color:#0f172a"><?=format_currency($p_monthly,$p['currency']??$currency)?><span style="font-size:13px;font-weight:400;color:#64748b">/mo</span></div><?php endif?>
-        <?php if($p_annually):?><div style="font-size:12px;color:#10b981">or <?=format_currency($p_annually,$p['currency']??$currency)?>/yr</div><?php endif?>
+<?php if(!$product && !get_param('product_id')): ?>
+<div class="row g-4">
+  <!-- WHMCS Style Sidebar Categories -->
+  <div class="col-lg-3">
+    <div class="bp-card mb-4" style="padding: 0; overflow: hidden; border-radius: 12px; border: 1px solid #e2e8f0">
+      <div style="background: #f8fafc; padding: 16px; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #0f172a; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px">
+        🛒 Categories
       </div>
-      <a href="?product_id=<?=$p['id']?>" class="bp-btn bp-btn-primary">Order →</a>
+      <div style="display: flex; flex-direction: column">
+        <?php foreach ($store_groups as $g): 
+          $active = ($selected_group_id !== 'all' && $selected_group_id !== null && (int)$selected_group_id === (int)$g['id'] && !$is_domain_view);
+        ?>
+          <a href="?group=<?=$g['id']?>" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; text-decoration: none; color: <?=$active ? '#2563eb' : '#475569'?>; background: <?=$active ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$active ? '#2563eb' : 'transparent'?>; font-weight: <?=$active ? '700' : '500'?>; font-size: 14px; border-bottom: 1px solid #f1f5f9; transition: all 0.2s">
+            <span>📁 <?=h($g['name'])?></span>
+            <span style="font-size: 12px; background: <?=$active ? '#3b82f6' : '#e2e8f0'?>; color: <?=$active ? '#ffffff' : '#475569'?>; padding: 2px 8px; border-radius: 20px; font-weight: 700">
+              <?=(int)DB::value("SELECT COUNT(*) FROM products WHERE group_id=? AND visible=1", 'i', [$g['id']])?>
+            </span>
+          </a>
+        <?php endforeach; ?>
+
+        <?php 
+          $all_active = ($selected_group_id === 'all' && !$is_domain_view);
+        ?>
+        <a href="?group=all" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$all_active ? '#2563eb' : '#475569'?>; background: <?=$all_active ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$all_active ? '#2563eb' : 'transparent'?>; font-weight: <?=$all_active ? '700' : '500'?>; font-size: 14px; border-bottom: 1px solid #f1f5f9; transition: all 0.2s">
+          <span>📦 All Categories</span>
+        </a>
+
+        <?php
+          $domain_prod = DB::row("SELECT id FROM products WHERE type='domain' AND visible=1 LIMIT 1");
+          if ($domain_prod):
+        ?>
+          <a href="?type=domain" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$is_domain_view ? '#2563eb' : '#475569'?>; background: <?=$is_domain_view ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$is_domain_view ? '#2563eb' : 'transparent'?>; font-weight: <?=$is_domain_view ? '700' : '500'?>; font-size: 14px; transition: all 0.2s">
+            <span>🌐 Register a Domain</span>
+          </a>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <!-- Actions/Shortcut Sidebar Widget -->
+    <div class="bp-card" style="padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fafafa">
+      <h4 style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 8px">Shortcuts</h4>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <a href="invoices.php" style="text-decoration: none; color: #3b82f6; font-size: 13px; font-weight: 600">🧾 View Invoices</a>
+        <a href="services.php" style="text-decoration: none; color: #3b82f6; font-size: 13px; font-weight: 600">💻 Active Services</a>
+        <a href="domains.php" style="text-decoration: none; color: #3b82f6; font-size: 13px; font-weight: 600">🌐 Manage Domains</a>
+      </div>
     </div>
   </div>
-</div>
-<?php endforeach?>
-<?php if(empty($all_products)):?><div class="bp-card"><div class="bp-empty"><div class="bp-empty-icon">📦</div><div class="bp-empty-title">No products available</div></div></div><?php endif?>
 
+  <!-- WHMCS Style Main Products Panel -->
+  <div class="col-lg-9">
+    <?php if ($is_domain_view && $domain_prod): ?>
+      <!-- Domain Registration Showcase -->
+      <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 32px; border-radius: 12px; color: #ffffff; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1)">
+        <h2 style="font-size: 24px; font-weight: 800; margin: 0">Find Your Perfect Domain Name</h2>
+        <p style="opacity: 0.9; font-size: 14px; margin: 8px 0 20px">Check availability and register domains instantly at competitive pricing.</p>
+        <form method="GET" action="order.php" style="display: flex; gap: 8px; max-width: 600px">
+          <input type="hidden" name="product_id" value="<?=$domain_prod['id']?>">
+          <input type="text" name="domain" class="bp-input" style="flex: 1; border: none; height: 48px; border-radius: 8px; font-size: 16px; padding: 0 16px; color: #0f172a" placeholder="yourbrandname.com" required>
+          <button type="submit" class="bp-btn bp-btn-primary" style="background: #0f172a; border-color: #0f172a; height: 48px; padding: 0 24px; font-weight: 700">Check →</button>
+        </form>
+      </div>
+
+      <div class="bp-card">
+        <div class="bp-card-header"><h3 class="bp-card-title">🌐 Supported Extensions Pricing Matrix</h3></div>
+        <div class="bp-card-body" style="padding: 0">
+          <?php 
+            $tld_matrix = DB::rows("SELECT * FROM domain_tlds WHERE status='active' ORDER BY tld ASC");
+            if ($tld_matrix):
+          ?>
+            <table class="bp-table">
+              <thead>
+                <tr>
+                  <th>Extension</th>
+                  <th>Register Price</th>
+                  <th>Renewal Price</th>
+                  <th>Transfer Price</th>
+                  <th style="text-align: right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($tld_matrix as $t): ?>
+                  <tr>
+                    <td style="font-weight: 700; color: #2563eb; font-family: monospace; font-size: 15px">.<?=h($t['tld'])?></td>
+                    <td style="font-weight: 600; color: #0f172a"><?=format_currency($t['retail_price_register'], $currency)?></td>
+                    <td style="color: #475569"><?=format_currency($t['retail_price_renew'], $currency)?></td>
+                    <td style="color: #475569"><?=format_currency($t['retail_price_transfer'], $currency)?></td>
+                    <td style="text-align: right">
+                      <a href="?product_id=<?=$domain_prod['id']?>&domain=mysite.<?=$t['tld']?>" class="bp-btn bp-btn-primary bp-btn-sm" style="padding: 4px 12px; font-size: 12px">Register</a>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          <?php else: ?>
+            <div class="bp-empty"><div class="bp-empty-icon">📡</div><div class="bp-empty-title">No extensions currently supported</div></div>
+          <?php endif; ?>
+        </div>
+      </div>
+
+    <?php else: ?>
+      <!-- Product Group Browse View -->
+      <?php 
+        if ($selected_group_id !== 'all') {
+          $current_group = DB::row("SELECT * FROM product_groups WHERE id=?", 'i', [$selected_group_id]);
+          if ($current_group):
+      ?>
+        <div class="mb-4" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px">
+          <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0">📦 <?=h($current_group['name'])?></h2>
+          <?php if ($current_group['description']): ?>
+            <p style="color: #64748b; font-size: 14px; margin: 8px 0 0"><?=h($current_group['description'])?></p>
+          <?php endif; ?>
+        </div>
+      <?php 
+          endif;
+        } else {
+      ?>
+        <div class="mb-4" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px">
+          <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0">📦 All Categories</h2>
+          <p style="color: #64748b; font-size: 14px; margin: 8px 0 0">Browse our comprehensive catalogue of services, plans, and cloud provisions.</p>
+        </div>
+      <?php
+        }
+      ?>
+
+      <!-- Products Listing Grid -->
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <?php 
+        $last_grp = '';
+        foreach ($products_to_show as $p): 
+          if (!$p['price_monthly'] && !$p['price_annually']) continue;
+          if ($selected_group_id === 'all' && $p['group_name'] !== $last_grp): $last_grp = $p['group_name'];
+        ?>
+          <h3 style="font-size: 12px; font-weight: 800; color: #475569; text-transform: uppercase; margin: 16px 0 4px; letter-spacing: 0.5px"><?=h($p['group_name'] ?: 'General Products')?></h3>
+        <?php endif; ?>
+
+          <div class="bp-card" style="border: 1px solid #e2e8f0; transition: border-color 0.2s, box-shadow 0.2s" onmouseover="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 4px 12px rgba(59, 130, 246, 0.05)'" onmouseout="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none'">
+            <div class="bp-card-body" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 20px 24px">
+              <div style="flex: 1; min-width: 250px">
+                <div style="font-size: 18px; font-weight: 800; color: #0f172a"><?=h($p['name'])?></div>
+                <?php if ($p['description']): ?>
+                  <div style="font-size: 13.5px; color: #64748b; margin-top: 6px; line-height: 1.5"><?=h($p['description'])?></div>
+                <?php endif; ?>
+                <span class="bp-badge bp-badge-info" style="margin-top: 10px; text-transform: capitalize; background: #eff6ff; color: #2563eb; font-weight: 700; border: 1px solid rgba(37, 99, 235, 0.1)"><?=$p['type']?></span>
+              </div>
+              
+              <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap">
+                <div style="text-align: right">
+                  <?php 
+                  $p_monthly = (float)($p['price_monthly'] ?? 0);
+                  $p_annually = (float)($p['price_annually'] ?? 0);
+                  if (!empty($_SESSION['reseller_domain_id'])) {
+                      require_once INC_PATH . '/modules/reseller.php';
+                      if ($p_monthly > 0) $p_monthly = Reseller::getRetailPrice((int)$p['id'], 'monthly', (int)$_SESSION['reseller_domain_id']);
+                      if ($p_annually > 0) $p_annually = Reseller::getRetailPrice((int)$p['id'], 'annually', (int)$_SESSION['reseller_domain_id']);
+                  }
+                  if ($p_monthly): 
+                  ?>
+                    <div style="font-size: 24px; font-weight: 900; color: #0f172a">
+                      <?=format_currency($p_monthly, $p['currency'] ?? $currency)?>
+                      <span style="font-size: 13px; font-weight: 500; color: #64748b">/mo</span>
+                    </div>
+                  <?php endif; ?>
+                  <?php if ($p_annually): ?>
+                    <div style="font-size: 12.5px; color: #10b981; font-weight: 600; margin-top: 2px">or <?=format_currency($p_annually, $p['currency'] ?? $currency)?>/yr</div>
+                  <?php endif; ?>
+                </div>
+                
+                <a href="?product_id=<?=$p['id']?>" class="bp-btn bp-btn-primary" style="padding: 10px 24px; font-weight: 700; border-radius: 8px">
+                  Order Now →
+                </a>
+              </div>
+            </div>
+          </div>
+        <?php endforeach; ?>
+
+        <?php if (empty($products_to_show)): ?>
+          <div class="bp-card"><div class="bp-empty"><div class="bp-empty-icon">📦</div><div class="bp-empty-title">No products available in this category</div></div></div>
+        <?php endif; ?>
+      </div>
+    <?php endif; ?>
+  </div>
+</div>
 <?php else: ?>
 <div class="row g-4">
   <div class="col-lg-7">
