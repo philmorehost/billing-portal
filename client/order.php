@@ -84,7 +84,7 @@ $page_title='Order';
 $error='';
 
 $pid=(int)get_param('product_id');
-if(!$pid && get_param('type')==='domain'){
+if(!$pid && get_param('type')==='domain' && (get_param('domain') || get_param('domain_reg'))){
     $domain_prod=DB::row("SELECT id FROM products WHERE type='domain' AND visible=1 LIMIT 1");
     if($domain_prod) $pid=(int)$domain_prod['id'];
 }
@@ -157,9 +157,12 @@ if (is_post() && post('action') === 'check_domain') {
     require_once INC_PATH . '/modules/reseller.php';
     $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
     $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
-    if ($domain_pricing && isset($domain_pricing['register'])) {
+    $action = post('domain_action', 'register');
+    $price_key = ($action === 'transfer') ? 'transfer' : 'register';
+
+    if ($domain_pricing && isset($domain_pricing[$price_key])) {
         $base_cur = DB::setting('base_currency', 'NGN');
-        $domain_price = convert_price($domain_pricing['register'], $base_cur, $currency);
+        $domain_price = convert_price($domain_pricing[$price_key], $base_cur, $currency);
     }
     
     json_response(['success' => true, 'available' => $available, 'price' => $domain_price]);
@@ -190,6 +193,8 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
         } else {
             $domain = trim(post('domain_existing'));
         }
+        $domain_action = post('domain_action', 'register');
+        $epp_code = trim(post('epp_code', ''));
         
         if ($req_domain && empty($domain)) {
             $error = 'A domain name is required for this product.';
@@ -252,7 +257,8 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                 require_once INC_PATH . '/modules/reseller.php';
                 $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
                 $domain_pricing = Reseller::getDomainPricing($domain, $reseller_id);
-                $price = $domain_pricing['register'];
+                $price_key = ($domain_action === 'transfer') ? 'transfer' : 'register';
+                $price = $domain_pricing[$price_key] ?? 0;
                 $base_cur = DB::setting('base_currency', 'NGN');
                 $price = convert_price($price, $base_cur, $currency);
             } else {
@@ -311,21 +317,27 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                         };
 
                         $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
-                        DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),'pending')",'iiiisssds',[$client['id'],$order_id,$pid2,$reseller_id,$domain,$cyc,$price,$next_due]);
+                        $module_data = ($domain_action === 'transfer' && !empty($epp_code)) ? json_encode(['epp_code' => $epp_code, 'action' => 'transfer']) : null;
+
+                        DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,module_data,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),?,'pending')",'iiiisssds',[$client['id'],$order_id,$pid2,$reseller_id,$domain,$cyc,$price,$next_due,$module_data]);
                         $svc_id=DB::lastInsertId();
 
+                        $invoice_desc = ($domain_action === 'transfer' && $prod['type'] === 'domain') ? "Domain Transfer - {$domain}" : $prod['name'].' ('.ucfirst(str_replace('_',' ',$cyc)).')';
                         $invoice_items = [
-                            ['description'=>$prod['name'].' ('.ucfirst(str_replace('_',' ',$cyc)).')','unit_price'=>$price,'quantity'=>1,'service_id'=>$svc_id]
+                            ['description'=>$invoice_desc,'unit_price'=>$price,'quantity'=>1,'service_id'=>$svc_id]
                         ];
 
                         if ($add_domain_service) {
                             $domain_prod_id = (int)DB::value("SELECT id FROM products WHERE type='domain' AND visible=1 LIMIT 1");
                             $dom_next_due = date('Y-m-d', strtotime('+1 year'));
-                            DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),'pending')",'iiiisssds',[$client['id'],$order_id,$domain_prod_id ?: null,$reseller_id,$domain,'annually',$domain_price,$dom_next_due]);
+                            $dom_module_data = ($domain_action === 'transfer' && !empty($epp_code)) ? json_encode(['epp_code' => $epp_code, 'action' => 'transfer']) : null;
+
+                            DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,module_data,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),?,'pending')",'iiiisssds',[$client['id'],$order_id,$domain_prod_id ?: null,$reseller_id,$domain,'annually',$domain_price,$dom_next_due,$dom_module_data]);
                             $dom_svc_id = DB::lastInsertId();
 
+                            $dom_invoice_desc = ($domain_action === 'transfer') ? "Domain Transfer - {$domain} (1 Year)" : "Domain Registration - {$domain} (1 Year)";
                             $invoice_items[] = [
-                                'description' => "Domain Registration - {$domain} (1 Year)",
+                                'description' => $dom_invoice_desc,
                                 'unit_price' => $domain_price,
                                 'quantity' => 1,
                                 'service_id' => $dom_svc_id
@@ -418,6 +430,26 @@ include 'partials/header.php';
     margin-top: 10px;
     line-height: 1.6;
   }
+  .domain-search-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 0;
+  }
+  .domain-search-tab {
+    padding: 10px 24px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: none;
+    border-radius: 10px 10px 0 0;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .domain-search-tab.active {
+    background: #ffffff;
+    color: #1d4ed8;
+  }
 </style>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
   <h1 class="bp-page-title" style="margin:0">🛒 Services Order Form</h1>
@@ -466,9 +498,14 @@ include 'partials/header.php';
         <?php
           $domain_prod = DB::row("SELECT id FROM products WHERE type='domain' AND visible=1 LIMIT 1");
           if ($domain_prod):
+            $is_reg = ($is_domain_view && get_param('domain_action') !== 'transfer');
+            $is_trans = ($is_domain_view && get_param('domain_action') === 'transfer');
         ?>
-          <a href="?type=domain" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$is_domain_view ? '#2563eb' : '#475569'?>; background: <?=$is_domain_view ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$is_domain_view ? '#2563eb' : 'transparent'?>; font-weight: <?=$is_domain_view ? '700' : '500'?>; font-size: 14px; transition: all 0.2s">
+          <a href="?type=domain&domain_action=register" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$is_reg ? '#2563eb' : '#475569'?>; background: <?=$is_reg ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$is_reg ? '#2563eb' : 'transparent'?>; font-weight: <?=$is_reg ? '700' : '500'?>; font-size: 14px; border-bottom: 1px solid #f1f5f9; transition: all 0.2s">
             <span>🌐 Register a Domain</span>
+          </a>
+          <a href="?type=domain&domain_action=transfer" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$is_trans ? '#2563eb' : '#475569'?>; background: <?=$is_trans ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$is_trans ? '#2563eb' : 'transparent'?>; font-weight: <?=$is_trans ? '700' : '500'?>; font-size: 14px; transition: all 0.2s">
+            <span>🔄 Transfer a Domain</span>
           </a>
         <?php endif; ?>
       </div>
@@ -488,15 +525,22 @@ include 'partials/header.php';
   <!-- WHMCS Style Main Products Panel -->
   <div class="col-lg-9">
     <?php if ($is_domain_view && $domain_prod): ?>
-      <!-- Domain Registration Showcase -->
-      <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 32px; border-radius: 12px; color: #ffffff; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1)">
-        <h2 style="font-size: 24px; font-weight: 800; margin: 0">Find Your Perfect Domain Name</h2>
-        <p style="opacity: 0.9; font-size: 14px; margin: 8px 0 20px">Check availability and register domains instantly at competitive pricing.</p>
-        <form method="GET" action="order.php" style="display: flex; gap: 8px; max-width: 600px">
-          <input type="hidden" name="product_id" value="<?=$domain_prod['id']?>">
-          <input type="text" name="domain" class="bp-input" style="flex: 1; border: none; height: 48px; border-radius: 8px; font-size: 16px; padding: 0 16px; color: #0f172a" placeholder="yourbrandname.com" required>
-          <button type="submit" class="bp-btn bp-btn-primary" style="background: #0f172a; border-color: #0f172a; height: 48px; padding: 0 24px; font-weight: 700">Check →</button>
-        </form>
+      <!-- Namecheap-style Domain Showcase -->
+      <div style="margin-bottom: 32px;">
+        <div class="domain-search-tabs">
+            <button type="button" class="domain-search-tab active" onclick="switchDomainSearchTab('register')">Register</button>
+            <button type="button" class="domain-search-tab" onclick="switchDomainSearchTab('transfer')">Transfer</button>
+        </div>
+        <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 40px; border-radius: 0 12px 12px 12px; color: #ffffff; box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.3)">
+          <h2 id="showcase-title" style="font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px">Register a domain name</h2>
+          <p id="showcase-desc" style="opacity: 0.9; font-size: 15px; margin: 10px 0 24px">Secure your online identity with the perfect domain name.</p>
+          <form method="GET" action="order.php" id="showcase-form" style="display: flex; gap: 12px; max-width: 700px; background: #ffffff; padding: 6px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1)">
+            <input type="hidden" name="product_id" value="<?=$domain_prod['id']?>">
+            <input type="hidden" name="domain_action" id="showcase-action" value="register">
+            <input type="text" name="domain" id="showcase-input" class="bp-input" style="flex: 1; border: none; height: 54px; font-size: 17px; padding: 0 20px; color: #0f172a; background: transparent; outline: none" placeholder="yourbrandname.com" required>
+            <button type="submit" id="showcase-btn" class="bp-btn bp-btn-primary" style="background: #fb923c; border-color: #fb923c; height: 54px; padding: 0 32px; font-weight: 800; font-size: 16px; border-radius: 10px; color: #ffffff">Search</button>
+          </form>
+        </div>
       </div>
 
       <div class="bp-card">
@@ -677,14 +721,21 @@ include 'partials/header.php';
           <label class="bp-label" style="font-size:14px; font-weight:700; color:#0f172a; margin-bottom:12px">🌐 Domain Configuration</label>
           
           <?php if($product['compulsory_new_domain'] || $product['type'] === 'domain'): ?>
-            <!-- Only show register new domain option -->
+            <!-- Only show register/transfer new domain option -->
             <input type="hidden" name="domain_option" id="domain-option" value="register">
-            <div style="font-size:13px; color:#475569; margin-bottom:12px; font-weight:600">Register a new domain name for your service:</div>
+            <input type="hidden" name="domain_action" id="domain-action" value="<?=h(get_param('domain_action', 'register'))?>">
+            <div style="font-size:13px; color:#475569; margin-bottom:12px; font-weight:600"><?=get_param('domain_action') === 'transfer' ? 'Transfer your existing domain:' : 'Register a new domain name for your service:'?></div>
             <div style="display:flex; gap:8px">
               <input type="text" id="domain-search-input" name="domain" class="bp-input" placeholder="example.com" value="<?=h(get_param('domain'))?>" required style="flex:1">
-              <button type="button" id="domain-search-btn" class="bp-btn bp-btn-primary" style="padding:10px 20px" onclick="checkDomainAvailability()">Search</button>
+              <button type="button" id="domain-search-btn" class="bp-btn bp-btn-primary" style="padding:10px 20px" onclick="checkDomainAvailability()"><?=get_param('domain_action') === 'transfer' ? 'Transfer' : 'Search'?></button>
             </div>
             <div id="domain-search-feedback" style="margin-top:10px; font-size:13px; font-weight:600"></div>
+
+            <div id="transfer-epp-field" style="display: <?=get_param('domain_action') === 'transfer' ? 'block' : 'none'?>; margin-top: 15px;">
+              <label class="bp-label">EPP / Auth Code</label>
+              <input type="text" name="epp_code" id="epp-code-input" class="bp-input" placeholder="Enter transfer authorization code" <?=get_param('domain_action') === 'transfer' ? 'required' : ''?>>
+              <small style="color: #64748b; margin-top: 4px; display: block;">You must obtain this code from your current registrar.</small>
+            </div>
           <?php else: ?>
             <!-- Show choice between register new domain and use existing domain -->
             <div style="display:flex; background:#e2e8f0; border-radius:10px; padding:4px; margin-bottom:16px">
@@ -834,6 +885,32 @@ function fmt(n){
     return sym+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
 }
 
+function switchDomainSearchTab(action) {
+    const tabs = document.querySelectorAll('.domain-search-tab');
+    const title = document.getElementById('showcase-title');
+    const desc = document.getElementById('showcase-desc');
+    const input = document.getElementById('showcase-input');
+    const btn = document.getElementById('showcase-btn');
+    const actionInput = document.getElementById('showcase-action');
+
+    tabs.forEach(t => t.classList.remove('active'));
+    if (action === 'register') {
+        tabs[0].classList.add('active');
+        title.textContent = 'Register a domain name';
+        desc.textContent = 'Secure your online identity with the perfect domain name.';
+        input.placeholder = 'yourbrandname.com';
+        btn.textContent = 'Search';
+        actionInput.value = 'register';
+    } else {
+        tabs[1].classList.add('active');
+        title.textContent = 'Transfer your domain';
+        desc.textContent = 'Transfer your domain to us and save on renewals.';
+        input.placeholder = 'Enter domain to transfer...';
+        btn.textContent = 'Transfer';
+        actionInput.value = 'transfer';
+    }
+}
+
 let domainPrice = 0;
 
 function updateSummary(price){
@@ -959,24 +1036,37 @@ async function checkDomainAvailability() {
         const fd = new FormData();
         fd.append('action', 'check_domain');
         fd.append('domain', domain);
+        const domainAction = document.getElementById('domain-action')?.value || document.getElementById('showcase-action')?.value || 'register';
+        fd.append('domain_action', domainAction);
         fd.append('csrf_token', '<?=csrf_token()?>');
         
         const r = await fetch(window.location.href, { method: 'POST', body: fd });
         const d = await r.json();
         
         if (d.success) {
-            if (d.available) {
+            const isTransfer = (domainAction === 'transfer');
+            if (d.available || isTransfer) {
                 domainChecked = true;
                 domainAvailable = true;
                 domainPrice = parseFloat(d.price || 0);
-                feedback.innerHTML = '<span style="color:#10b981">✓ Premium Choice! ' + domain + ' is available! (+ ' + fmt(domainPrice) + '/yr)</span>';
+
+                if (isTransfer) {
+                    feedback.innerHTML = '<span style="color:#10b981">✓ Domain is eligible for transfer! Cost: ' + fmt(domainPrice) + '</span>';
+                    const eppField = document.getElementById('transfer-epp-field');
+                    if (eppField) {
+                        eppField.style.display = 'block';
+                        document.getElementById('epp-code-input').required = true;
+                    }
+                } else {
+                    feedback.innerHTML = '<span style="color:#10b981">✓ Premium Choice! ' + domain + ' is available! (+ ' + fmt(domainPrice) + '/yr)</span>';
+                }
                 
                 // Show in summary panel!
                 const domRow = document.getElementById('sum-domain-row');
                 if (domRow) {
                     domRow.style.display = 'flex';
                     const descEl = document.getElementById('sum-domain-desc');
-                    if (descEl) descEl.textContent = 'Domain: ' + domain + ' (1 Year)';
+                    if (descEl) descEl.textContent = (isTransfer ? 'Transfer: ' : 'Domain: ') + domain + ' (1 Year)';
                     const priceEl = document.getElementById('sum-domain-price');
                     if (priceEl) priceEl.textContent = fmt(domainPrice);
                 }
