@@ -197,7 +197,7 @@ if(is_post() && post('action') === 'sync_upperlink' && csrf_verify()) {
         }
         
         $timeStr = gmdate("y-m-d H");
-        $hash = hash_hmac("sha256", $apiKey, "{$username}:{$timeStr}");
+        $hash = hash_hmac("sha256", $apiKey, "{$username}:{$timeStr}", true);
         $token = base64_encode($hash);
         
         $url = 'https://client.upperlink.ng/clients/modules/addons/DomainsReseller/api/index.php/tlds/pricing';
@@ -209,7 +209,8 @@ if(is_post() && post('action') === 'sync_upperlink' && csrf_verify()) {
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "username: {$username}",
-            "token: {$token}"
+            "token: {$token}",
+            "User-Agent: WHMBiller/1.1"
         ]);
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

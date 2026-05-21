@@ -19,12 +19,13 @@ class UpperlinkModule extends ProvisioningBase {
         $apiKey = $this->config['api_key'] ?? '';
         
         $timeStr = gmdate("y-m-d H");
-        $hash = hash_hmac("sha256", $apiKey, "{$username}:{$timeStr}");
+        $hash = hash_hmac("sha256", $apiKey, "{$username}:{$timeStr}", true);
         $token = base64_encode($hash);
 
         return [
             "username: {$username}",
-            "token: {$token}"
+            "token: {$token}",
+            "User-Agent: WHMBiller/1.1"
         ];
     }
 
