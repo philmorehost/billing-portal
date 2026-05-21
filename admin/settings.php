@@ -194,6 +194,20 @@ include 'partials/header.php';
             <option value="1" <?= $s('two_factor_required')==='1'?'selected':'' ?>>Required</option>
           </select>
         </div>
+        <hr style="margin:24px 0;border-color:#f1f5f9">
+        <h5 style="font-weight:700;margin-bottom:16px">Google OAuth Login</h5>
+        <div class="bp-form-group">
+          <label class="bp-label">Enable Google Login</label>
+          <select name="google_auth_enabled" class="bp-select">
+            <option value="1" <?= $s('google_auth_enabled')==='1'?'selected':'' ?>>Enabled</option>
+            <option value="0" <?= $s('google_auth_enabled')==='0'?'selected':'' ?>>Disabled</option>
+          </select>
+        </div>
+        <div class="bp-form-row bp-form-row-2">
+          <div class="bp-form-group"><label class="bp-label">Client ID</label><input type="text" name="google_auth_client_id" class="bp-input" value="<?= h($s('google_auth_client_id')) ?>" placeholder="xxxxxxxx.apps.googleusercontent.com"></div>
+          <div class="bp-form-group"><label class="bp-label">Client Secret</label><input type="password" name="google_auth_client_secret" class="bp-input" placeholder="Leave blank to keep existing"></div>
+        </div>
+        <div class="bp-input-hint">Redirect URI: <code><?= BASE_URL ?>/client/login-google.php</code></div>
 
         <?php elseif ($tab === 'legal'): ?>
         <div class="bp-form-group">
