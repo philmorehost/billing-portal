@@ -66,6 +66,19 @@ if(is_post()&&csrf_verify()){
   <div class="mb-3"><label class="form-label d-flex justify-content-between">Password <a href="forgot-password.php" style="color:#3b82f6;font-size:12px;text-decoration:none">Forgot?</a></label><input type="password" name="password" class="form-control" placeholder="••••••••" required></div>
   <div class="form-check mb-4"><input type="checkbox" name="remember" class="form-check-input" id="rem"><label class="form-check-label" for="rem" style="font-size:13px">Keep me signed in for 30 days</label></div>
   <button type="submit" class="btn-si">Sign In →</button></form>
+
+  <?php if(DB::setting('google_auth_enabled') === '1'): ?>
+  <div style="margin: 20px 0; display: flex; align-items: center; gap: 10px;">
+    <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
+    <div style="font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Or continue with</div>
+    <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
+  </div>
+  <a href="login-google.php" style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; text-decoration: none; color: #0f172a; font-weight: 700; font-size: 14px; transition: all 0.2s;" onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';" onmouseout="this.style.background='transparent'; this.style.borderColor='#e2e8f0';">
+    <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" width="18" height="18" alt="Google">
+    Sign in with Google
+  </a>
+  <?php endif; ?>
+
   <div style="text-align:center;margin-top:20px;font-size:13px;color:#64748b">Don't have an account? <a href="register.php" style="color:#3b82f6;font-weight:500;text-decoration:none">Create one</a></div>
 </div>
 </div></body></html>

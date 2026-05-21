@@ -134,6 +134,16 @@ if (class_exists('DB') && file_exists($config_file)) {
             DB::execute("ALTER TABLE servers ADD COLUMN password VARCHAR(255) DEFAULT NULL AFTER username");
         }
 
+        // Auto-migrate: add required columns for new features
+        $c_cols = DB::rows("SHOW COLUMNS FROM clients LIKE 'google_id'");
+        if (empty($c_cols)) DB::execute("ALTER TABLE clients ADD COLUMN google_id VARCHAR(255) DEFAULT NULL AFTER email_verify_token");
+
+        $c_cols2 = DB::rows("SHOW COLUMNS FROM clients LIKE 'email_verified'");
+        if (empty($c_cols2)) DB::execute("ALTER TABLE clients ADD COLUMN email_verified TINYINT(1) DEFAULT 0 AFTER google_id");
+
+        $s_cols = DB::rows("SHOW COLUMNS FROM services LIKE 'module_data'");
+        if (empty($s_cols)) DB::execute("ALTER TABLE services ADD COLUMN module_data JSON DEFAULT NULL AFTER termination_date");
+
         // Auto-migrate: check if affiliate_referrals table exists
         $tables = DB::rows("SHOW TABLES LIKE 'affiliate_referrals'");
         if (empty($tables)) {

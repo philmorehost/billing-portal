@@ -7,7 +7,7 @@ if(is_post()&&csrf_verify()){
     $name=trim(post('name')); $type=post('type','other'); $cur=post('currency','NGN');
     $pm=post('price_monthly'); $pq=post('price_quarterly'); $psa=post('price_semi_annually');
     $pa=post('price_annually'); $pb=post('price_biennially'); $sf=post('setup_fee',0);
-    $gid=(int)post('group_id')||null; $desc=trim(post('description')); $module=trim(post('module'));
+    $gid = post('group_id') !== '' ? (int) post('group_id') : null; $desc=trim(post('description')); $module=trim(post('module'));
     $tax=(int)!empty($_POST['tax_enabled']); $visible=(int)!empty($_POST['visible']);
     $auto=(int)!empty($_POST['auto_provision']); $wd=(float)post('wholesale_discount',0);
     $req_dom=(int)!empty($_POST['require_domain']); $comp_dom=(int)!empty($_POST['compulsory_new_domain']);

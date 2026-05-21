@@ -8,7 +8,7 @@ $errors=[];
 if(is_post()&&csrf_verify()){
     $name=trim(post('name')); $type=post('type'); $cur=post('currency');
     $slug=slug(trim(post('slug')));
-    $gid=(int)post('group_id')||null; $wd=(float)post('wholesale_discount',0);
+    $gid = post('group_id') !== '' ? (int) post('group_id') : null; $wd=(float)post('wholesale_discount',0);
     if(!$name) $errors[]='Product name required.';
     if(!$slug) $errors[]='Slug (URL Friendly Name) required.';
     

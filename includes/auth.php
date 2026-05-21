@@ -138,4 +138,42 @@ class Auth {
     public static function hashPassword(string $pw): string { return password_hash($pw,PASSWORD_BCRYPT,['cost'=>12]); }
     public static function isAdminLoggedIn(): bool { return !empty($_SESSION['admin_id']); }
     public static function isClientLoggedIn(): bool { return !empty($_SESSION['client_id']); }
+
+    public static function googleLogin(array $data): array {
+        $google_id = $data['id'];
+        $email = strtolower(trim($data['email']));
+        $first_name = $data['given_name'] ?? 'Google';
+        $last_name = $data['family_name'] ?? 'User';
+
+        // 1. Try finding by Google ID
+        $c = DB::row("SELECT * FROM clients WHERE google_id=?", 's', [$google_id]);
+
+        // 2. If not found, try finding by email
+        if (!$c) {
+            $c = DB::row("SELECT * FROM clients WHERE email=?", 's', [$email]);
+            if ($c) {
+                // Link account
+                DB::execute("UPDATE clients SET google_id=? WHERE id=?", 'si', [$google_id, $c['id']]);
+            }
+        }
+
+        // 3. If still not found, create new account
+        if (!$c) {
+            $dummy_pass = password_hash(generate_token(16), PASSWORD_BCRYPT);
+            DB::execute(
+                "INSERT INTO clients (first_name, last_name, email, password, google_id, status, email_verified) VALUES (?, ?, ?, ?, ?, 'active', 1)",
+                'sssss', [$first_name, $last_name, $email, $dummy_pass, $google_id]
+            );
+            $new_id = DB::lastInsertId();
+            $c = DB::row("SELECT * FROM clients WHERE id=?", 'i', [$new_id]);
+        }
+
+        if ($c['status'] === 'suspended') {
+            return ['success' => false, 'error' => 'Account suspended. Contact support.'];
+        }
+
+        self::setClientSession($c);
+        log_activity('client_login_google', "Logged in via Google", 'client', $c['id']);
+        return ['success' => true];
+    }
 }
