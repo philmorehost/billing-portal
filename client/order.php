@@ -497,17 +497,15 @@ include 'partials/header.php';
         </a>
 
         <?php
-          if ($domain_prod):
-            $is_reg = ($is_domain_view && get_param('domain_action') !== 'transfer');
-            $is_trans = ($is_domain_view && get_param('domain_action') === 'transfer');
+          $is_reg = ($is_domain_view && get_param('domain_action') !== 'transfer');
+          $is_trans = ($is_domain_view && get_param('domain_action') === 'transfer');
         ?>
-          <a href="?type=domain&domain_action=register" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$is_reg ? '#2563eb' : '#475569'?>; background: <?=$is_reg ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$is_reg ? '#2563eb' : 'transparent'?>; font-weight: <?=$is_reg ? '700' : '500'?>; font-size: 14px; border-bottom: 1px solid #f1f5f9; transition: all 0.2s">
-            <span>🌐 Register a Domain</span>
-          </a>
-          <a href="?type=domain&domain_action=transfer" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$is_trans ? '#2563eb' : '#475569'?>; background: <?=$is_trans ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$is_trans ? '#2563eb' : 'transparent'?>; font-weight: <?=$is_trans ? '700' : '500'?>; font-size: 14px; transition: all 0.2s">
-            <span>🔄 Transfer a Domain</span>
-          </a>
-        <?php endif; ?>
+        <a href="?type=domain&domain_action=register" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$is_reg ? '#2563eb' : '#475569'?>; background: <?=$is_reg ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$is_reg ? '#2563eb' : 'transparent'?>; font-weight: <?=$is_reg ? '700' : '500'?>; font-size: 14px; border-bottom: 1px solid #f1f5f9; transition: all 0.2s">
+          <span>🌐 Register a Domain</span>
+        </a>
+        <a href="?type=domain&domain_action=transfer" style="display: flex; align-items: center; padding: 14px 16px; text-decoration: none; color: <?=$is_trans ? '#2563eb' : '#475569'?>; background: <?=$is_trans ? '#eff6ff' : 'transparent'?>; border-left: 3px solid <?=$is_trans ? '#2563eb' : 'transparent'?>; font-weight: <?=$is_trans ? '700' : '500'?>; font-size: 14px; transition: all 0.2s">
+          <span>🔄 Transfer a Domain</span>
+        </a>
       </div>
     </div>
 
