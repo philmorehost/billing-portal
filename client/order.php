@@ -290,7 +290,6 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                 $subtotal = $price + $domain_price;
                 $tax_enabled=DB::setting('tax_enabled','1')==='1';
                 $tax_rate=$tax_enabled?(float)DB::setting('tax_rate',0):0;
-                $tax_amt=round($subtotal*($tax_rate/100),2);
                 $discount=0; $coupon_id=null;
 
                 if($coupon_code){
@@ -298,6 +297,8 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                     if($cv['valid']){$discount=$cv['discount'];$coupon_id=$cv['coupon']['id'];}
                     else $error=$cv['error'];
                 }
+
+                $tax_amt=$tax_enabled ? round(($subtotal - $discount)*($tax_rate/100),2) : 0;
 
                 if(!$error){
                     $total=max(0,$subtotal+$tax_amt-$discount);
@@ -925,7 +926,7 @@ let domainPrice = 0;
 function updateSummary(price){
     curPrice=price;
     const subtotal = price + domainPrice;
-    const tax=Math.round(subtotal*taxRate*100)/100;
+    const tax=Math.round((subtotal - discountAmt)*taxRate*100)/100;
     const total=Math.max(0,subtotal+tax-discountAmt);
     document.getElementById('sum-price').textContent=fmt(price);
     const st=document.getElementById('sum-tax');if(st)st.textContent=fmt(tax);
