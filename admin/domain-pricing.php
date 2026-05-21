@@ -483,6 +483,12 @@ if(is_post() && post('action') === 'bulk_markup' && csrf_verify()) {
     $success = "Successfully bulk-applied {$markup_val}" . ($markup_type==='percentage'?'%':'') . " markup to all {$updated} active TLD(s).";
 }
 
+// 8. Reset All TLDs
+if(is_post() && post('action') === 'reset_pricing' && csrf_verify()) {
+    DB::execute("TRUNCATE TABLE domain_tlds");
+    $success = "All domain pricing and extensions have been reset successfully.";
+}
+
 $tlds = DB::rows("SELECT * FROM domain_tlds ORDER BY tld ASC");
 include 'partials/header.php';
 ?>
@@ -512,6 +518,13 @@ include 'partials/header.php';
         <input type="hidden" name="action" value="sync_upperlink">
         <button type="submit" class="bp-btn bp-btn-success" style="background-color:#10b981;border-color:#10b981">
           🔄 Sync Upperlink TLDs
+        </button>
+      </form>
+      <form method="POST" style="display:inline-block" onsubmit="return confirm('Are you sure you want to RESET ALL domain pricing? This will clear all existing TLDs and costs.')">
+        <?=csrf_input()?>
+        <input type="hidden" name="action" value="reset_pricing">
+        <button type="submit" class="bp-btn bp-btn-outline" style="color:#ef4444; border-color:#fecdd3">
+          🗑 Reset All Pricing
         </button>
       </form>
     </div>

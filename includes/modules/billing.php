@@ -21,8 +21,8 @@ class Billing {
 
         $tax_enabled = DB::setting('tax_enabled', '1') === '1';
         $tax_rate    = (float) DB::setting('tax_rate', 0);
-        $tax_amount  = $tax_enabled ? round($subtotal * ($tax_rate / 100), 2) : 0;
         $discount    = (float) ($data['discount_amount'] ?? 0);
+        $tax_amount  = $tax_enabled ? round(($subtotal - $discount) * ($tax_rate / 100), 2) : 0;
         $total       = max(0, $subtotal + $tax_amount - $discount);
 
         $r = DB::execute(
@@ -283,15 +283,9 @@ class Billing {
         // Convert amount based on currency selection
         $inv_cur = $inv['currency'] ?? 'NGN';
         $total = (float)$inv['total'];
-        $rate = (float)DB::setting('usd_exchange_rate', 1600);
 
-        if ($inv_cur === 'USD') {
-            $amount_usd = $total;
-            $amount_ngn = $total * $rate;
-        } else {
-            $amount_ngn = $total;
-            $amount_usd = $total / $rate;
-        }
+        $amount_usd = self::convertCurrency($total, $inv_cur, 'USD');
+        $amount_ngn = self::convertCurrency($total, $inv_cur, 'NGN');
 
         if ($currency === 'USD') {
             $pay_amount = (int) round($amount_usd * 100); // Paystack in cents
