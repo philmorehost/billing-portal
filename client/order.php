@@ -83,9 +83,10 @@ try {
 $page_title='Order';
 $error='';
 
+$domain_prod=DB::row("SELECT * FROM products WHERE type='domain' AND visible=1 LIMIT 1");
+
 $pid=(int)get_param('product_id');
 if(!$pid && get_param('type')==='domain' && (get_param('domain') || get_param('domain_reg'))){
-    $domain_prod=DB::row("SELECT id FROM products WHERE type='domain' AND visible=1 LIMIT 1");
     if($domain_prod) $pid=(int)$domain_prod['id'];
 }
 $product=$pid?DB::row("SELECT p.*,pg.name AS group_name FROM products p LEFT JOIN product_groups pg ON pg.id=p.group_id WHERE p.id=? AND p.visible=1",'i',[$pid]):null;
@@ -496,7 +497,6 @@ include 'partials/header.php';
         </a>
 
         <?php
-          $domain_prod = DB::row("SELECT id FROM products WHERE type='domain' AND visible=1 LIMIT 1");
           if ($domain_prod):
             $is_reg = ($is_domain_view && get_param('domain_action') !== 'transfer');
             $is_trans = ($is_domain_view && get_param('domain_action') === 'transfer');
@@ -524,22 +524,33 @@ include 'partials/header.php';
 
   <!-- WHMCS Style Main Products Panel -->
   <div class="col-lg-9">
-    <?php if ($is_domain_view && $domain_prod): ?>
+    <?php if ($is_domain_view): ?>
       <!-- Namecheap-style Domain Showcase -->
       <div style="margin-bottom: 32px;">
+        <?php
+          $req_action = get_param('domain_action', 'register');
+          $is_transfer_init = ($req_action === 'transfer');
+        ?>
         <div class="domain-search-tabs">
-            <button type="button" class="domain-search-tab active" onclick="switchDomainSearchTab('register')">Register</button>
-            <button type="button" class="domain-search-tab" onclick="switchDomainSearchTab('transfer')">Transfer</button>
+            <button type="button" class="domain-search-tab <?=$is_transfer_init?'':'active'?>" onclick="switchDomainSearchTab('register')">Register</button>
+            <button type="button" class="domain-search-tab <?=$is_transfer_init?'active':''?>" onclick="switchDomainSearchTab('transfer')">Transfer</button>
         </div>
         <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 40px; border-radius: 0 12px 12px 12px; color: #ffffff; box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.3)">
-          <h2 id="showcase-title" style="font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px">Register a domain name</h2>
-          <p id="showcase-desc" style="opacity: 0.9; font-size: 15px; margin: 10px 0 24px">Secure your online identity with the perfect domain name.</p>
-          <form method="GET" action="order.php" id="showcase-form" style="display: flex; gap: 12px; max-width: 700px; background: #ffffff; padding: 6px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1)">
-            <input type="hidden" name="product_id" value="<?=$domain_prod['id']?>">
-            <input type="hidden" name="domain_action" id="showcase-action" value="register">
-            <input type="text" name="domain" id="showcase-input" class="bp-input" style="flex: 1; border: none; height: 54px; font-size: 17px; padding: 0 20px; color: #0f172a; background: transparent; outline: none" placeholder="yourbrandname.com" required>
-            <button type="submit" id="showcase-btn" class="bp-btn bp-btn-primary" style="background: #fb923c; border-color: #fb923c; height: 54px; padding: 0 32px; font-weight: 800; font-size: 16px; border-radius: 10px; color: #ffffff">Search</button>
-          </form>
+          <?php if (!$domain_prod): ?>
+            <div style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 10px; border: 1px dashed rgba(255,255,255,0.3); text-align: center">
+              <h3 style="margin: 0; font-size: 18px">⚠️ Configuration Required</h3>
+              <p style="margin: 8px 0 0; opacity: 0.8; font-size: 14px">No active domain product found. Please go to Admin > Products and create a product with type "domain".</p>
+            </div>
+          <?php else: ?>
+            <h2 id="showcase-title" style="font-size: 28px; font-weight: 800; margin: 0; letter-spacing: -0.5px"><?=$is_transfer_init?'Transfer your domain':'Register a domain name'?></h2>
+            <p id="showcase-desc" style="opacity: 0.9; font-size: 15px; margin: 10px 0 24px"><?=$is_transfer_init?'Transfer your domain to us and save on renewals.':'Secure your online identity with the perfect domain name.'?></p>
+            <form method="GET" action="order.php" id="showcase-form" style="display: flex; gap: 12px; max-width: 700px; background: #ffffff; padding: 6px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1)">
+              <input type="hidden" name="product_id" value="<?=$domain_prod['id']?>">
+              <input type="hidden" name="domain_action" id="showcase-action" value="<?=$is_transfer_init?'transfer':'register'?>">
+              <input type="text" name="domain" id="showcase-input" class="bp-input" style="flex: 1; border: none; height: 54px; font-size: 17px; padding: 0 20px; color: #0f172a; background: transparent; outline: none" placeholder="<?=$is_transfer_init?'Enter domain to transfer...':'yourbrandname.com'?>" value="<?=h(get_param('domain'))?>" required>
+              <button type="submit" id="showcase-btn" class="bp-btn bp-btn-primary" style="background: #fb923c; border-color: #fb923c; height: 54px; padding: 0 32px; font-weight: 800; font-size: 16px; border-radius: 10px; color: #ffffff"><?=$is_transfer_init?'Transfer':'Search'?></button>
+            </form>
+          <?php endif; ?>
         </div>
       </div>
 
