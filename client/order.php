@@ -321,7 +321,7 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                         $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
                         $module_data = ($domain_action === 'transfer' && !empty($epp_code)) ? json_encode(['epp_code' => $epp_code, 'action' => 'transfer']) : null;
 
-                        DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,module_data,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),?,'pending')",'iiiisssds',[$client['id'],$order_id,$pid2,$reseller_id,$domain,$cyc,$price,$next_due,$module_data]);
+                        DB::execute("INSERT INTO services (client_id, order_id, product_id, reseller_id, domain, billing_cycle, price, currency, next_due_date, registration_date, module_data, status) VALUES (?,?,?,?,?,?,?,?,?,CURDATE(),?,'pending')", 'iiiissdsss', [$client['id'], $order_id, $pid2, $reseller_id, $domain, $cyc, $price, $currency, $next_due, $module_data]);
                         $svc_id=DB::lastInsertId();
 
                         $invoice_desc = ($domain_action === 'transfer' && $prod['type'] === 'domain') ? "Domain Transfer - {$domain}" : $prod['name'].' ('.ucfirst(str_replace('_',' ',$cyc)).')';
@@ -334,7 +334,7 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                             $dom_next_due = date('Y-m-d', strtotime('+1 year'));
                             $dom_module_data = ($domain_action === 'transfer' && !empty($epp_code)) ? json_encode(['epp_code' => $epp_code, 'action' => 'transfer']) : null;
 
-                            DB::execute("INSERT INTO services (client_id,order_id,product_id,reseller_id,domain,billing_cycle,price,next_due_date,registration_date,module_data,status) VALUES (?,?,?,?,?,?,?,?,CURDATE(),?,'pending')",'iiiisssds',[$client['id'],$order_id,$domain_prod_id ?: null,$reseller_id,$domain,'annually',$domain_price,$dom_next_due,$dom_module_data]);
+                            DB::execute("INSERT INTO services (client_id, order_id, product_id, reseller_id, domain, billing_cycle, price, currency, next_due_date, registration_date, module_data, status) VALUES (?,?,?,?,?,?,?,?,?,CURDATE(),?,'pending')", 'iiiissdsss', [$client['id'], $order_id, $domain_prod_id ?: null, $reseller_id, $domain, 'annually', $domain_price, $currency, $dom_next_due, $dom_module_data]);
                             $dom_svc_id = DB::lastInsertId();
 
                             $dom_invoice_desc = ($domain_action === 'transfer') ? "Domain Transfer - {$domain} (1 Year)" : "Domain Registration - {$domain} (1 Year)";

@@ -99,9 +99,16 @@ include '../partials/header.php';
     <div class="bp-card"><div class="bp-card-header"><h3 class="bp-card-title">Services (<?=count($services)?>)</h3></div>
       <?php if($services):?>
       <table class="bp-table"><thead><tr><th>Service</th><th>Cycle / Price</th><th>Next Due</th><th>Status</th></tr></thead><tbody>
-      <?php foreach($services as $s):$sb=['active'=>'success','suspended'=>'danger','pending'=>'warning','terminated'=>'muted'];?>
+      <?php foreach($services as $s):$sb=['active'=>'success','suspended'=>'danger','pending'=>'warning','terminated'=>'muted'];
+      $s_cur = $s['currency'] ?: $currency;
+      $price_str = format_currency($s['price'], $s_cur);
+      if ($s_cur !== $currency) {
+          $conv = Billing::convertCurrency($s['price'], $s_cur, $currency);
+          $price_str .= ' ('.format_currency($conv, $currency).')';
+      }
+      ?>
       <tr><td><div style="font-weight:600"><?=h($s['pname'])?></div><?php if($s['domain']):?><div style="font-size:12px;color:#64748b"><?=h($s['domain'])?></div><?php endif?></td>
-      <td style="font-size:13px"><?=ucfirst(str_replace('_',' ',$s['billing_cycle']))?> · <?=format_currency($s['price'],$currency)?></td>
+      <td style="font-size:13px"><?=ucfirst(str_replace('_',' ',$s['billing_cycle']))?> · <?=$price_str?></td>
       <td style="font-size:13px;color:#64748b"><?=$s['next_due_date']?format_date($s['next_due_date']):'—'?></td>
       <td><span class="bp-badge bp-badge-<?=$sb[$s['status']]??'muted'?>"><?=$s['status']?></span></td></tr>
       <?php endforeach?>

@@ -31,7 +31,7 @@ if(is_post()&&csrf_verify()){
             if($r['success']) redirect($r['auth_url']);
             else $error=$r['error'];
         } else {
-            DB::execute("INSERT INTO transactions (client_id,invoice_id,type,amount,currency,gateway,gateway_ref,description,status) VALUES (?,'credit',?,?,?,?,?,'Add funds - awaiting approval','pending')",'iiidssss',[$client['id'],$inv_id,$amount,$currency,$gateway,trim(post('reference')),'']);
+            DB::execute("INSERT INTO transactions (client_id, invoice_id, type, amount, currency, gateway, gateway_ref, description, status) VALUES (?, ?, 'credit', ?, ?, ?, ?, 'Add funds - awaiting approval', 'pending')", 'iidsss', [$client['id'], $inv_id, $amount, $currency, $gateway, trim(post('reference'))]);
             $ae=DB::setting('company_email');
             if($ae) Mailer::send($ae,'Admin',"Add Funds Request - {$client['first_name']} {$client['last_name']}","<p>Client requested to add ".format_currency($amount,$currency)." via {$gateway}. Review in admin panel.</p>");
             $success='Top-up request submitted. Funds will be added after verification.';
