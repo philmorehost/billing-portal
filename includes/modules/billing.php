@@ -28,7 +28,7 @@ class Billing {
         $r = DB::execute(
             "INSERT INTO invoices (client_id, order_id, invoice_number, subtotal, tax_amount, discount_amount, total, currency, status, due_date, notes)
              VALUES (?,?,?,?,?,?,?,?,'unpaid',?,?)",
-            'iisddddss',
+            'iisddddsss',
             [
                 $data['client_id'],
                 $data['order_id'] ?? null,
