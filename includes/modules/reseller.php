@@ -211,11 +211,27 @@ class Reseller {
      * Get retail register/renew/transfer pricing for a domain based on TLD
      */
     public static function getDomainPricing(string $domain, ?int $reseller_id = null): array {
-        $parts = explode('.', trim($domain));
-        $tld = strtolower(end($parts));
+        $domain = strtolower(trim($domain));
+        $parts = explode('.', $domain);
+        $row = null;
+        $tld = '';
 
-        // Fetch TLD base pricing
-        $row = DB::row("SELECT * FROM domain_tlds WHERE tld=? AND status='active'", 's', [$tld]);
+        // Check for longest matching TLD suffix (e.g. .com.ng before .ng)
+        for ($i = 1; $i < count($parts); $i++) {
+            $check_tld = implode('.', array_slice($parts, $i));
+            $res = DB::row("SELECT * FROM domain_tlds WHERE tld=? AND status='active'", 's', [$check_tld]);
+            if ($res) {
+                $row = $res;
+                $tld = $check_tld;
+                break;
+            }
+        }
+
+        if (!$row) {
+            // Fallback to just the last part if no specific TLD found in table
+            $tld = end($parts);
+            $row = DB::row("SELECT * FROM domain_tlds WHERE tld=? AND status='active'", 's', [$tld]);
+        }
         
         if (!$row) {
             // Default fallback pricing if not synced

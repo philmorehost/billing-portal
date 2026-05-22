@@ -157,13 +157,13 @@ class Billing {
 
     // ── Currency Conversion ────────────────────────────────────────────────
 
-    public static function getLiveRates(): array {
+    public static function getLiveRates(bool $force = false): array {
         $cached_rates = DB::setting('live_rates_cache');
         $last_updated = (int) DB::setting('live_rates_last_updated', 0);
         $now = time();
 
-        // Cache rates for 6 hours (21600 seconds)
-        if ($cached_rates && ($now - $last_updated) < 21600) {
+        // Cache rates for 6 hours (21600 seconds), unless forced
+        if (!$force && $cached_rates && ($now - $last_updated) < 21600) {
             $rates = json_decode($cached_rates, true);
             if (is_array($rates) && !empty($rates['NGN'])) {
                 return $rates;
@@ -171,20 +171,28 @@ class Billing {
         }
 
         // Fetch new rates
-        $ch = curl_init('https://open.er-api.com/v6/latest/USD');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
-        $resp = curl_exec($ch);
-        curl_close($ch);
+        $endpoints = [
+            'https://open.er-api.com/v6/latest/USD',
+            'https://api.exchangerate-api.com/v4/latest/USD'
+        ];
 
-        if ($resp) {
-            $data = json_decode($resp, true);
-            if (!empty($data['rates']) && is_array($data['rates'])) {
-                $rates = $data['rates'];
-                // Save to DB
-                self::saveSetting('live_rates_cache', json_encode($rates));
-                self::saveSetting('live_rates_last_updated', (string)$now);
-                return $rates;
+        foreach ($endpoints as $url) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            $resp = curl_exec($ch);
+            curl_close($ch);
+
+            if ($resp) {
+                $data = json_decode($resp, true);
+                $fetched_rates = $data['rates'] ?? ($data['conversion_rates'] ?? null);
+                if (!empty($fetched_rates) && is_array($fetched_rates) && !empty($fetched_rates['NGN'])) {
+                    // Save to DB
+                    self::saveSetting('live_rates_cache', json_encode($fetched_rates));
+                    self::saveSetting('live_rates_last_updated', (string)$now);
+                    return $fetched_rates;
+                }
             }
         }
 
@@ -194,7 +202,13 @@ class Billing {
             if (is_array($rates)) return $rates;
         }
 
-        return ['USD' => 1.0, 'NGN' => 1600.0, 'EUR' => 0.92, 'GBP' => 0.79, 'GHS' => 14.5, 'KES' => 130.0, 'ZAR' => 18.5];
+        return ['USD' => 1.0, 'NGN' => 1550.0, 'EUR' => 0.93, 'GBP' => 0.78, 'GHS' => 15.5, 'KES' => 132.0, 'ZAR' => 18.2];
+    }
+
+    public static function refreshLiveRates(): bool {
+        $rates = self::getLiveRates(true);
+        $last_updated = (int) DB::setting('live_rates_last_updated', 0);
+        return (time() - $last_updated) < 60; // Success if updated in last minute
     }
 
     private static function saveSetting(string $key, string $value): void {

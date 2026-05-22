@@ -6,6 +6,16 @@ $page_title = 'Settings';
 
 if (is_post() && csrf_verify()) {
     $group = post('group');
+
+    if (post('action') === 'refresh_rates') {
+        require_once INC_PATH . '/modules/billing.php';
+        if (Billing::refreshLiveRates()) {
+            redirect_with_flash('settings.php?tab=billing', 'success', 'Exchange rates refreshed successfully.');
+        } else {
+            redirect_with_flash('settings.php?tab=billing', 'danger', 'Failed to refresh exchange rates. Please check your internet connection or API availability.');
+        }
+    }
+
     $keys  = array_keys($_POST);
     $saved = 0;
 
@@ -107,6 +117,32 @@ include 'partials/header.php';
             <label class="bp-label">USD to NGN Markup Charge (%)</label>
             <input type="number" step="0.01" name="usd_to_ngn_markup_percent" class="bp-input" value="<?= h($s('usd_to_ngn_markup_percent','0')) ?>">
             <div class="bp-input-hint">Additional markup charge over live rate for NGN conversion only.</div>
+          </div>
+          <div class="bp-form-group" style="background:#f8fafc; padding:16px; border-radius:12px; border:1px solid #e2e8f0; grid-column: span 2">
+            <label class="bp-label" style="font-size:12px; text-transform:uppercase; color:#64748b; margin-bottom:8px">📊 Live Exchange Rate Info</label>
+            <div style="display:flex; justify-content:space-between; align-items:center">
+              <div>
+                <?php
+                require_once INC_PATH . '/modules/billing.php';
+                $rates = Billing::getLiveRates();
+                $ngn_rate = $rates['NGN'] ?? 1600;
+                $markup = (float)$s('usd_to_ngn_markup_percent','0');
+                $effective_rate = round($ngn_rate * (1 + $markup/100), 2);
+                $last_upd = (int)$s('live_rates_last_updated', 0);
+                ?>
+                <div style="font-size:18px; font-weight:800; color:#0f172a">1 USD = <?=number_format($effective_rate, 2)?> NGN</div>
+                <div style="font-size:12px; color:#64748b; margin-top:4px">Base Rate: <?=number_format($ngn_rate, 2)?> | Last Sync: <?=$last_upd ? date('Y-m-d H:i:s', $last_upd) : 'Never'?></div>
+                <details style="margin-top:8px; font-size:11px; color:#64748b">
+                  <summary style="cursor:pointer">View Other Rates</summary>
+                  <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:4px; margin-top:4px">
+                    <?php foreach ($rates as $cur_code => $rate_val): if($cur_code === 'NGN') continue; ?>
+                      <div><?=$cur_code?>: <?=number_format($rate_val, 2)?></div>
+                    <?php endforeach; ?>
+                  </div>
+                </details>
+              </div>
+              <button type="submit" name="action" value="refresh_rates" class="bp-btn bp-btn-outline bp-btn-sm" style="border-radius:30px; padding:6px 16px">🔄 Force Refresh Rates</button>
+            </div>
           </div>
           <div class="bp-form-group"><label class="bp-label">Invoice Prefix</label><input type="text" name="invoice_prefix" class="bp-input" value="<?= h($s('invoice_prefix','INV')) ?>"></div>
           <div class="bp-form-group"><label class="bp-label">Invoice Due Days</label><input type="number" name="invoice_due_days" class="bp-input" value="<?= h($s('invoice_due_days','7')) ?>"></div>
