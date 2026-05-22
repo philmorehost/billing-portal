@@ -152,8 +152,9 @@ class Auth {
         if (!$c) {
             $c = DB::row("SELECT * FROM clients WHERE email=?", 's', [$email]);
             if ($c) {
-                // Link account
-                DB::execute("UPDATE clients SET google_id=? WHERE id=?", 'si', [$google_id, $c['id']]);
+                // Link account and ensure it is active and verified
+                DB::execute("UPDATE clients SET google_id=?, email_verified=1, status=IF(status='pending', 'active', status) WHERE id=?", 'si', [$google_id, $c['id']]);
+                $c = DB::row("SELECT * FROM clients WHERE id=?", 'i', [$c['id']]);
             }
         }
 
@@ -174,6 +175,8 @@ class Auth {
 
         self::setClientSession($c);
         log_activity('client_login_google', "Logged in via Google", 'client', $c['id']);
-        return ['success' => true];
+
+        $is_incomplete = empty($c['phone']) || empty($c['address1']) || empty($c['city']);
+        return ['success' => true, 'incomplete' => $is_incomplete];
     }
 }

@@ -33,6 +33,12 @@ include 'partials/header.php';
 ?>
 <div class="bp-content">
 <h1 class="bp-page-title">My Profile</h1>
+<?php if(!empty($_GET['complete'])):?>
+<div class="alert-custom alert-info mb-4" style="background:#eff6ff; border:1px solid #3b82f6; color:#1d4ed8">
+  <span style="font-size:20px; margin-right:10px">📝</span>
+  <strong>Finish your profile!</strong> Please add your phone number and address details below to complete your registration.
+</div>
+<?php endif; ?>
 <?php if($error):?><div class="alert-custom alert-danger mb-3"><span>✕</span> <?=h($error)?></div><?php endif?>
 <?php if($success):?><div class="alert-custom alert-success mb-3"><span>✓</span> <?=h($success)?></div><?php endif?>
 <?=flash_html()?>

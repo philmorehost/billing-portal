@@ -83,7 +83,21 @@ if(is_post()&&csrf_verify()){
 <div class="mb-4"><label class="form-label">Confirm Password *</label><input type="password" name="confirm_password" id="pw2" class="form-control" required></div>
 <div class="tos mb-4"><div class="form-check"><input type="checkbox" name="tos_accept" id="tos" class="form-check-input" <?=!empty($_POST['tos_accept'])?'checked':''?> required>
 <label class="form-check-label" for="tos">I agree to the <a href="<?=BASE_URL?>/terms.php" target="_blank">Terms of Service</a> and <a href="<?=BASE_URL?>/privacy.php" target="_blank">Privacy Policy</a>.</label></div></div>
-<button type="submit" class="btn-r">Create Account →</button></form></div>
+<button type="submit" class="btn-r">Create Account →</button></form>
+
+<?php if(DB::setting('google_auth_enabled') === '1'): ?>
+<div style="margin: 20px 0; display: flex; align-items: center; gap: 10px;">
+  <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
+  <div style="font-size: 12px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Or sign up with</div>
+  <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
+</div>
+<a href="login-google.php" style="display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; text-decoration: none; color: #0f172a; font-weight: 700; font-size: 14px; transition: all 0.2s;" onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';" onmouseout="this.style.background='transparent'; this.style.borderColor='#e2e8f0';">
+  <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" width="18" height="18" alt="Google">
+  Sign up with Google
+</a>
+<?php endif; ?>
+
+</div>
 <div style="text-align:center;margin-top:16px;font-size:13px;color:#64748b">Already have an account? <a href="login.php" style="color:#3b82f6;font-weight:500;text-decoration:none">Sign in</a></div>
 </div>
 <script>

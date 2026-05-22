@@ -57,7 +57,15 @@ include '../partials/header.php';
       <!-- Credit balance -->
       <div style="background:linear-gradient(135deg,#0f172a,#1e3a5f);border-radius:12px;padding:16px;margin-top:16px;text-align:center">
         <div style="color:rgba(255,255,255,.5);font-size:11px;text-transform:uppercase;font-weight:700">Credit Balance</div>
-        <div style="color:#fff;font-size:24px;font-weight:900"><?=format_currency($client['credit_balance'],$currency)?></div>
+        <?php
+        $c_cur = !empty($client['currency']) ? $client['currency'] : 'NGN';
+        $cb_str = format_currency($client['credit_balance'], $c_cur);
+        if ($c_cur !== $currency) {
+            $conv = Billing::convertCurrency((float)$client['credit_balance'], $c_cur, $currency);
+            $cb_str .= ' <div style="font-size:13px; opacity:0.6; font-weight:500">('.format_currency($conv, $currency).')</div>';
+        }
+        ?>
+        <div style="color:#fff;font-size:22px;font-weight:900;line-height:1.2;margin-top:4px"><?=$cb_str?></div>
       </div>
     </div></div>
 
@@ -100,10 +108,10 @@ include '../partials/header.php';
       <?php if($services):?>
       <table class="bp-table"><thead><tr><th>Service</th><th>Cycle / Price</th><th>Next Due</th><th>Status</th></tr></thead><tbody>
       <?php foreach($services as $s):$sb=['active'=>'success','suspended'=>'danger','pending'=>'warning','terminated'=>'muted'];
-      $s_cur = $s['currency'] ?: $currency;
+      $s_cur = !empty($s['currency']) ? $s['currency'] : (!empty($client['currency']) ? $client['currency'] : $currency);
       $price_str = format_currency($s['price'], $s_cur);
       if ($s_cur !== $currency) {
-          $conv = Billing::convertCurrency($s['price'], $s_cur, $currency);
+          $conv = Billing::convertCurrency((float)$s['price'], $s_cur, $currency);
           $price_str .= ' ('.format_currency($conv, $currency).')';
       }
       ?>
@@ -120,9 +128,15 @@ include '../partials/header.php';
     <div class="bp-card" style="margin-top:16px"><div class="bp-card-header"><h3 class="bp-card-title">Recent Invoices</h3><a href="<?=BASE_URL?>/admin/invoices.php?q=<?=urlencode($client['email'])?>" class="bp-btn bp-btn-outline bp-btn-sm">View All</a></div>
       <?php if($invoices):?>
       <table class="bp-table"><thead><tr><th>Invoice</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead><tbody>
-      <?php foreach($invoices as $inv):$sb=['paid'=>'success','unpaid'=>'warning','overdue'=>'danger','cancelled'=>'muted'];?>
+      <?php foreach($invoices as $inv):$sb=['paid'=>'success','unpaid'=>'warning','overdue'=>'danger','cancelled'=>'muted'];
+      $inv_total_str = format_currency($inv['total'], $inv['currency']);
+      if ($inv['currency'] !== $currency) {
+          $conv = Billing::convertCurrency((float)$inv['total'], $inv['currency'], $currency);
+          $inv_total_str .= ' <div style="font-size:11px; color:#64748b; font-weight:normal">('.format_currency($conv, $currency).')</div>';
+      }
+      ?>
       <tr><td><a href="<?=BASE_URL?>/admin/invoices/view.php?id=<?=$inv['id']?>" style="color:#3b82f6;font-weight:600;text-decoration:none">#<?=h($inv['invoice_number'])?></a></td>
-      <td style="font-weight:600"><?=format_currency($inv['total'],$inv['currency'])?></td>
+      <td style="font-weight:600"><?=$inv_total_str?></td>
       <td style="font-size:13px;color:#64748b"><?=format_date($inv['due_date'])?></td>
       <td><span class="bp-badge bp-badge-<?=$sb[$inv['status']]??'muted'?>"><?=$inv['status']?></span></td></tr>
       <?php endforeach?></tbody></table>

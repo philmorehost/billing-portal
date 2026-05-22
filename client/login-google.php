@@ -71,6 +71,9 @@ if (empty($user_data['id']) || empty($user_data['email'])) {
 $res = Auth::googleLogin($user_data);
 
 if ($res['success']) {
+    if (!empty($res['incomplete'])) {
+        redirect_with_flash(BASE_URL . '/client/profile.php?complete=1', 'info', 'Almost there! Please complete your registration by adding your phone number and address.');
+    }
     redirect(BASE_URL . '/client/');
 } else {
     redirect_with_flash(BASE_URL . '/client/login.php', 'danger', $res['error'] ?? 'Google login failed.');
