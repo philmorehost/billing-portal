@@ -215,14 +215,8 @@ include dirname(dirname(__FILE__)).'/partials/header.php';
           <form method="POST"><?=csrf_input()?><input type="hidden" name="action" value="pay_paystack">
           <?php 
           $inv_currency = $inv['currency'] ?? 'NGN';
-          $rate = (float)DB::setting('usd_exchange_rate', 1600);
-          if ($inv_currency === 'USD') {
-              $display_usd = $inv['total'];
-              $display_ngn = $inv['total'] * $rate;
-          } else {
-              $display_ngn = $inv['total'];
-              $display_usd = $inv['total'] / $rate;
-          }
+          $display_usd = Billing::convertCurrency($inv['total'], $inv_currency, 'USD');
+          $display_ngn = Billing::convertCurrency($inv['total'], $inv_currency, 'NGN');
           ?>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="pay_currency" value="NGN" checked> NGN (₦<?=number_format($display_ngn, 2)?>)</label>
