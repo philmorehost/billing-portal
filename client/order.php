@@ -197,7 +197,16 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
         $domain_action = post('domain_action', 'register');
         $epp_code = trim(post('epp_code', ''));
         
-        if ($req_domain && empty($domain)) {
+        // VPS/Dedicated specifics
+        $hostname = trim(post('hostname', ''));
+        $root_pass = post('root_password', '');
+
+        if (in_array($prod['type'], ['vps', 'dedicated'])) {
+            if (empty($hostname)) $error = 'A hostname is required for this server.';
+            elseif (empty($root_pass)) $error = 'A root password is required for your server.';
+        }
+
+        if (!$error && $req_domain && empty($domain)) {
             $error = 'A domain name is required for this product.';
         } elseif ($comp_new && $domain_opt !== 'register') {
             $error = 'You must register a new domain name for this product.';
@@ -319,9 +328,13 @@ if(is_post()&&csrf_verify()&&post('action')==='place_order'){
                         };
 
                         $reseller_id = !empty($_SESSION['reseller_domain_id']) ? (int)$_SESSION['reseller_domain_id'] : null;
-                        $module_data = ($domain_action === 'transfer' && !empty($epp_code)) ? json_encode(['epp_code' => $epp_code, 'action' => 'transfer']) : null;
+                        $module_data_arr = [];
+                        if ($domain_action === 'transfer' && !empty($epp_code)) { $module_data_arr['epp_code'] = $epp_code; $module_data_arr['action'] = 'transfer'; }
+                        if (!empty($hostname)) { $module_data_arr['hostname'] = $hostname; }
+                        if (!empty($root_pass)) { $module_data_arr['root_password'] = $root_pass; }
+                        $module_data = !empty($module_data_arr) ? json_encode($module_data_arr) : null;
 
-                        DB::execute("INSERT INTO services (client_id, order_id, product_id, reseller_id, domain, billing_cycle, price, currency, next_due_date, registration_date, module_data, status) VALUES (?,?,?,?,?,?,?,?,?,CURDATE(),?,'pending')", 'iiiissdsss', [$client['id'], $order_id, $pid2, $reseller_id, $domain, $cyc, $price, $currency, $next_due, $module_data]);
+                        DB::execute("INSERT INTO services (client_id, order_id, product_id, reseller_id, domain, billing_cycle, price, currency, next_due_date, registration_date, module_data, status) VALUES (?,?,?,?,?,?,?,?,?,CURDATE(),?,'pending')", 'iiiissdsss', [$client['id'], $order_id, $pid2, $reseller_id, $domain ?: $hostname, $cyc, $price, $currency, $next_due, $module_data]);
                         $svc_id=DB::lastInsertId();
 
                         $invoice_desc = ($domain_action === 'transfer' && $prod['type'] === 'domain') ? "Domain Transfer - {$domain}" : $prod['name'].' ('.ucfirst(str_replace('_',' ',$cyc)).')';
@@ -725,6 +738,20 @@ include 'partials/header.php';
             <?php $first_cycle=false; endforeach?>
           </div>
         </div>
+
+        <?php if(in_array($product['type'], ['vps', 'dedicated'])): ?>
+        <div class="bp-form-group" style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:16px; padding:20px; margin-bottom:20px">
+          <label class="bp-label" style="font-size:14px; font-weight:700; color:#0f172a; margin-bottom:12px">🖥 Server Configuration</label>
+          <div class="bp-form-group">
+            <label class="bp-label">Server Hostname *</label>
+            <input type="text" name="hostname" class="bp-input" placeholder="myserver.example.com" required>
+          </div>
+          <div class="bp-form-group">
+            <label class="bp-label">Root Password *</label>
+            <input type="password" name="root_password" class="bp-input" placeholder="Create secure server password" required>
+          </div>
+        </div>
+        <?php endif; ?>
 
         <?php if($product['require_domain'] || in_array($product['type'],['hosting','domain'])):?>
         <div class="bp-form-group" style="background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:16px; padding:20px; margin-bottom:20px">

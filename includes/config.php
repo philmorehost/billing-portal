@@ -147,6 +147,10 @@ if (class_exists('DB') && file_exists($config_file)) {
         $s_cols2 = DB::rows("SHOW COLUMNS FROM services LIKE 'currency'");
         if (empty($s_cols2)) DB::execute("ALTER TABLE services ADD COLUMN currency VARCHAR(10) DEFAULT NULL AFTER price");
 
+        // Auto-migrate products for external sync
+        $p_cols = DB::rows("SHOW COLUMNS FROM products LIKE 'external_id'");
+        if (empty($p_cols)) DB::execute("ALTER TABLE products ADD COLUMN external_id VARCHAR(100) DEFAULT NULL AFTER module");
+
         // Auto-migrate: check if affiliate_referrals table exists
         $tables = DB::rows("SHOW TABLES LIKE 'affiliate_referrals'");
         if (empty($tables)) {

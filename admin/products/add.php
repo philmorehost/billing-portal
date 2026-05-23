@@ -8,6 +8,7 @@ if(is_post()&&csrf_verify()){
     $pm=post('price_monthly'); $pq=post('price_quarterly'); $psa=post('price_semi_annually');
     $pa=post('price_annually'); $pb=post('price_biennially'); $sf=post('setup_fee',0);
     $gid = post('group_id') !== '' ? (int) post('group_id') : null; $desc=trim(post('description')); $module=trim(post('module'));
+    $ext_id = trim(post('external_id'));
     $tax=(int)!empty($_POST['tax_enabled']); $visible=(int)!empty($_POST['visible']);
     $auto=(int)!empty($_POST['auto_provision']); $wd=(float)post('wholesale_discount',0);
     $req_dom=(int)!empty($_POST['require_domain']); $comp_dom=(int)!empty($_POST['compulsory_new_domain']);
@@ -17,8 +18,8 @@ if(is_post()&&csrf_verify()){
         // Ensure unique slug
         $existing=DB::value("SELECT id FROM products WHERE slug=?",'s',[$sl]);
         if($existing) $sl=$sl.'-'.time();
-        DB::execute("INSERT INTO products (group_id,name,slug,description,type,price_monthly,price_quarterly,price_semi_annually,price_annually,price_biennially,setup_fee,currency,wholesale_discount,module,tax_enabled,auto_provision,visible,require_domain,compulsory_new_domain) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            'issssddddddsdsiiiii',[$gid?:null,$name,$sl,$desc,$type,(float)$pm?:null,(float)$pq?:null,(float)$psa?:null,(float)$pa?:null,(float)$pb?:null,(float)$sf,$cur,$wd,$module?:null,$tax,$auto,$visible,$req_dom,$comp_dom]);
+        DB::execute("INSERT INTO products (group_id,name,slug,description,type,price_monthly,price_quarterly,price_semi_annually,price_annually,price_biennially,setup_fee,currency,wholesale_discount,module,external_id,tax_enabled,auto_provision,visible,require_domain,compulsory_new_domain) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            'issssddddddsdsisiiii',[$gid?:null,$name,$sl,$desc,$type,(float)$pm?:null,(float)$pq?:null,(float)$psa?:null,(float)$pa?:null,(float)$pb?:null,(float)$sf,$cur,$wd,$module?:null,$ext_id?:null,$tax,$auto,$visible,$req_dom,$comp_dom]);
         redirect_with_flash(BASE_URL.'/admin/products.php','success','Product created successfully.');
     }
 }
@@ -34,10 +35,10 @@ include '../partials/header.php';
   <div class="col-lg-8">
     <div class="bp-card"><div class="bp-card-header"><h3 class="bp-card-title">Product Details</h3></div><div class="bp-card-body">
       <div class="bp-form-row bp-form-row-2">
-        <div class="bp-form-group"><label class="bp-label">Product Name *</label><input type="text" name="name" class="bp-input" value="<?=h(post('name'))?>" required></div>
+        <div class="bp-form-group"><label class="bp-label">Product Name *</label><input type="text" name="name" class="bp-input" value="<?=h(get_param('name', post('name')))?>" required></div>
         <div class="bp-form-group"><label class="bp-label">Type</label>
           <select name="type" class="bp-select">
-            <?php foreach(['hosting','domain','vps','dedicated','other'] as $t):?><option value="<?=$t?>" <?=post('type')===$t?'selected':''?>><?=ucfirst($t)?></option><?php endforeach?>
+            <?php foreach(['hosting','domain','vps','dedicated','other'] as $t):?><option value="<?=$t?>" <?=get_param('type', post('type'))===$t?'selected':''?>><?=ucfirst($t)?></option><?php endforeach?>
           </select>
         </div>
       </div>
@@ -59,7 +60,7 @@ include '../partials/header.php';
     <div class="bp-card" style="margin-top:16px"><div class="bp-card-header"><h3 class="bp-card-title">Pricing (leave blank if not offered)</h3></div><div class="bp-card-body">
       <div class="bp-form-row bp-form-row-2">
         <?php foreach(['monthly'=>'Monthly','quarterly'=>'Quarterly','semi_annually'=>'Semi-Annual','annually'=>'Annual','biennially'=>'Biennial'] as $k=>$label):?>
-        <div class="bp-form-group"><label class="bp-label"><?=$label?></label><input type="number" name="price_<?=$k?>" class="bp-input" step="0.01" min="0" placeholder="0.00" value="<?=h(post('price_'.$k))?>"></div>
+        <div class="bp-form-group"><label class="bp-label"><?=$label?></label><input type="number" name="price_<?=$k?>" class="bp-input" step="0.01" min="0" placeholder="0.00" value="<?=h($k==='monthly'?get_param('price', post('price_'.$k)):post('price_'.$k))?>"></div>
         <?php endforeach?>
         <div class="bp-form-group"><label class="bp-label">Setup Fee</label><input type="number" name="setup_fee" class="bp-input" step="0.01" min="0" placeholder="0.00" value="<?=h(post('setup_fee','0'))?>"></div>
       </div>
@@ -78,12 +79,15 @@ include '../partials/header.php';
             'connectreseller' => 'ConnectReseller Domains',
             'upperlink'       => 'Upperlink Domains',
             'nocix'           => 'NOCIX Dedicated',
-            'time4vps'        => 'Time4VPS'
+            'time4vps'        => 'Time4VPS',
+            'interserver'     => 'Interserver',
+            'thesslstore'     => 'The SSL Store'
           ] as $m => $mname):?>
-            <option value="<?=$m?>" <?=post('module')===$m?'selected':''?>><?=h($mname)?></option>
+            <option value="<?=$m?>" <?=get_param('module', post('module'))===$m?'selected':''?>><?=h($mname)?></option>
           <?php endforeach?>
         </select>
       </div>
+      <div class="bp-form-group"><label class="bp-label">External / Plan ID</label><input type="text" name="external_id" class="bp-input" value="<?=h(get_param('external_id', post('external_id')))?>" placeholder="Module-specific ID"></div>
       <div class="bp-form-group"><label class="bp-label">Reseller Discount (%)</label><input type="number" name="wholesale_discount" class="bp-input" step="0.1" min="0" max="100" value="<?=h(post('wholesale_discount','0'))?>"><div class="bp-input-hint">% discount given to resellers on this product.</div></div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="tax_enabled" value="1" <?=post('tax_enabled','1')?'checked':''?>> Apply Tax</label>

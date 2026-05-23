@@ -118,7 +118,28 @@ function run_domain_expiry_check(){ return "Domain expiry check complete."; }
 function run_affiliate_payouts(){ return "Affiliate payouts processed."; }
 function run_report_generation(){ return "Reports generated."; }
 
-$jobs=['invoice_generation'=>'run_invoice_generation','payment_reminders'=>'run_payment_reminders','service_suspension'=>'run_service_suspension','service_termination'=>'run_service_termination','domain_expiry_check'=>'run_domain_expiry_check','ssl_cert_check'=>'run_ssl_cert_check','affiliate_payouts'=>'run_affiliate_payouts','report_generation'=>'run_report_generation','auto_provision'=>'run_auto_provision'];
+function run_nocix_stock_sync(): string {
+    if (DB::setting('module_nocix_sync_status') !== '1') return "NOCIX sync disabled in settings.";
+    require_once INC_PATH . '/modules/provisioning/dispatcher.php';
+    $module = ProvisioningDispatcher::buildModule('nocix');
+    if (!$module) return "NOCIX module failed to initialize.";
+
+    $nocix_products = $module->listProducts();
+    $in_stock_ids = [];
+    foreach ($nocix_products as $p) { if (!empty($p['id'])) $in_stock_ids[] = (string)$p['id']; }
+
+    $local_products = DB::rows("SELECT id, external_id, visible FROM products WHERE module='nocix'");
+    $hidden = 0; $shown = 0;
+    foreach ($local_products as $lp) {
+        if (empty($lp['external_id'])) continue;
+        $in_stock = in_array((string)$lp['external_id'], $in_stock_ids);
+        if ($in_stock && !$lp['visible']) { DB::execute("UPDATE products SET visible=1 WHERE id=?", 'i', [$lp['id']]); $shown++; }
+        elseif (!$in_stock && $lp['visible']) { DB::execute("UPDATE products SET visible=0 WHERE id=?", 'i', [$lp['id']]); $hidden++; }
+    }
+    return "NOCIX Sync: Shown {$shown}, Hidden {$hidden} out-of-stock products.";
+}
+
+$jobs=['invoice_generation'=>'run_invoice_generation','payment_reminders'=>'run_payment_reminders','service_suspension'=>'run_service_suspension','service_termination'=>'run_service_termination','domain_expiry_check'=>'run_domain_expiry_check','ssl_cert_check'=>'run_ssl_cert_check','affiliate_payouts'=>'run_affiliate_payouts','report_generation'=>'run_report_generation','auto_provision'=>'run_auto_provision', 'nocix_stock_sync' => 'run_nocix_stock_sync'];
 
 if ($run_job) {
     if (isset($jobs[$run_job])) { try { cron_log($run_job,'success',call_user_func($jobs[$run_job])); } catch(Exception $e){ cron_log($run_job,'failed',$e->getMessage()); } }

@@ -13,6 +13,8 @@ require_once __DIR__ . '/connectreseller.php';
 require_once __DIR__ . '/upperlink.php';
 require_once __DIR__ . '/nocix.php';
 require_once __DIR__ . '/time4vps.php';
+require_once __DIR__ . '/interserver.php';
+require_once __DIR__ . '/thesslstore.php';
 
 class ProvisioningDispatcher {
 
@@ -68,6 +70,8 @@ class ProvisioningDispatcher {
             'upperlink'       => new UpperlinkModule($config),
             'nocix'           => new NocixModule($config),
             'time4vps'        => new Time4VPSModule($config),
+            'interserver'     => new InterserverModule($config),
+            'thesslstore'     => new TheSSLStoreModule($config),
             default           => null,
         };
     }

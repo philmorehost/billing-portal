@@ -311,8 +311,18 @@ include 'partials/header.php';
         <!-- NOCIX -->
         <h5 style="font-weight:700;margin-bottom:16px;color:#0f172a">🔌 NOCIX Dedicated Servers</h5>
         <div class="bp-form-row bp-form-row-2">
+          <div class="bp-form-group"><label class="bp-label">User ID (Email)</label><input type="text" name="module_nocix_username" class="bp-input" value="<?=h($s('module_nocix_username'))?>" placeholder="you@example.com"></div>
           <div class="bp-form-group"><label class="bp-label">API Key</label><input type="password" name="module_nocix_api_key" class="bp-input" placeholder="Leave blank to keep existing"></div>
+        </div>
+        <div class="bp-form-row bp-form-row-2">
           <div class="bp-form-group"><label class="bp-label">Default Location</label><input type="text" name="module_nocix_default_location" class="bp-input" value="<?=h($s('module_nocix_default_location','dallas'))?>" placeholder="dallas"></div>
+          <div class="bp-form-group">
+            <label class="bp-label">Auto-Sync Stock Status</label>
+            <select name="module_nocix_sync_status" class="bp-select">
+                <option value="1" <?= $s('module_nocix_sync_status')==='1'?'selected':'' ?>>Enabled (Hide out of stock)</option>
+                <option value="0" <?= $s('module_nocix_sync_status')==='0'?'selected':'' ?>>Disabled</option>
+            </select>
+          </div>
         </div>
         <hr style="margin:24px 0;border-color:#f1f5f9">
 
@@ -323,6 +333,29 @@ include 'partials/header.php';
           <div class="bp-form-group"><label class="bp-label">API Password</label><input type="password" name="module_time4vps_password" class="bp-input" placeholder="Leave blank to keep existing"></div>
         </div>
         <div class="bp-form-group"><label class="bp-label">Default VPS Product ID</label><input type="text" name="module_time4vps_default_product_id" class="bp-input" value="<?=h($s('module_time4vps_default_product_id'))?>" placeholder="Product ID from Time4VPS panel"></div>
+        <hr style="margin:24px 0;border-color:#f1f5f9">
+
+        <!-- Interserver -->
+        <h5 style="font-weight:700;margin-bottom:16px;color:#0f172a">🔌 Interserver</h5>
+        <div class="bp-form-group">
+          <label class="bp-label">API Key</label>
+          <input type="password" name="module_interserver_api_key" class="bp-input" placeholder="Leave blank to keep existing">
+        </div>
+        <hr style="margin:24px 0;border-color:#f1f5f9">
+
+        <!-- The SSL Store -->
+        <h5 style="font-weight:700;margin-bottom:16px;color:#0f172a">🔌 The SSL Store</h5>
+        <div class="bp-form-row bp-form-row-2">
+          <div class="bp-form-group"><label class="bp-label">Partner Code</label><input type="text" name="module_thesslstore_partner_code" class="bp-input" value="<?=h($s('module_thesslstore_partner_code'))?>"></div>
+          <div class="bp-form-group"><label class="bp-label">Auth Token</label><input type="password" name="module_thesslstore_auth_token" class="bp-input" placeholder="Leave blank to keep existing"></div>
+        </div>
+        <div class="bp-form-group">
+          <label class="bp-label">Test Mode</label>
+          <select name="module_thesslstore_test_mode" class="bp-select">
+            <option value="0" <?=$s('module_thesslstore_test_mode')==='0'?'selected':''?>>Live</option>
+            <option value="1" <?=$s('module_thesslstore_test_mode')==='1'?'selected':''?>>Test (Sandbox)</option>
+          </select>
+        </div>
 
         <?php elseif ($tab === 'landing'):
           $cms_products = [];

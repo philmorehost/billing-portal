@@ -9,6 +9,7 @@ if(is_post()&&csrf_verify()){
     $name=trim(post('name')); $type=post('type'); $cur=post('currency');
     $slug=slug(trim(post('slug')));
     $gid = post('group_id') !== '' ? (int) post('group_id') : null; $wd=(float)post('wholesale_discount',0);
+    $ext_id = trim(post('external_id'));
     if(!$name) $errors[]='Product name required.';
     if(!$slug) $errors[]='Slug (URL Friendly Name) required.';
     
@@ -17,12 +18,13 @@ if(is_post()&&csrf_verify()){
     if($existing) $errors[]='The slug is already used by another product.';
     
     if(empty($errors)){
-        DB::execute("UPDATE products SET group_id=?,name=?,slug=?,description=?,type=?,price_monthly=?,price_quarterly=?,price_semi_annually=?,price_annually=?,price_biennially=?,setup_fee=?,currency=?,wholesale_discount=?,module=?,tax_enabled=?,auto_provision=?,visible=?,require_domain=?,compulsory_new_domain=? WHERE id=?",
-            'issssddddddsdsiiiiii',[
+        DB::execute("UPDATE products SET group_id=?,name=?,slug=?,description=?,type=?,price_monthly=?,price_quarterly=?,price_semi_annually=?,price_annually=?,price_biennially=?,setup_fee=?,currency=?,wholesale_discount=?,module=?,external_id=?,tax_enabled=?,auto_provision=?,visible=?,require_domain=?,compulsory_new_domain=? WHERE id=?",
+            'issssddddddsdsisiiiiii',[
                 $gid?:null,post('name'),$slug,post('description'),post('type'),
                 (float)post('price_monthly')?:null,(float)post('price_quarterly')?:null,(float)post('price_semi_annually')?:null,
                 (float)post('price_annually')?:null,(float)post('price_biennially')?:null,(float)post('setup_fee',0),
                 post('currency'),post('wholesale_discount',0),post('module')?:null,
+                $ext_id?:null,
                 (int)!empty($_POST['tax_enabled']),(int)!empty($_POST['auto_provision']),(int)!empty($_POST['visible']),
                 (int)!empty($_POST['require_domain']),(int)!empty($_POST['compulsory_new_domain']),
                 $pid
@@ -82,12 +84,15 @@ include '../partials/header.php';
             'connectreseller' => 'ConnectReseller Domains',
             'upperlink'       => 'Upperlink Domains',
             'nocix'           => 'NOCIX Dedicated',
-            'time4vps'        => 'Time4VPS'
+            'time4vps'        => 'Time4VPS',
+            'interserver'     => 'Interserver',
+            'thesslstore'     => 'The SSL Store'
           ] as $m => $mname):?>
             <option value="<?=$m?>" <?=post('module')===$m?'selected':''?>><?=h($mname)?></option>
           <?php endforeach?>
         </select>
       </div>
+      <div class="bp-form-group"><label class="bp-label">External / Plan ID</label><input type="text" name="external_id" class="bp-input" value="<?=h(post('external_id'))?>" placeholder="Module-specific ID"></div>
       <div class="bp-form-group"><label class="bp-label">Wholesale Discount (%)</label><input type="number" name="wholesale_discount" class="bp-input" step="0.1" min="0" max="100" value="<?=h(post('wholesale_discount'))?>"></div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px"><input type="checkbox" name="tax_enabled" value="1" <?=post('tax_enabled')?'checked':''?>> Apply Tax</label>
